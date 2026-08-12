@@ -18,7 +18,7 @@ Testers **cannot** submit free-form text only. Every run must use this fixed str
 
 | Field | Description |
 |---|---|
-| `environment` | e.g. `demo`, `staging` |
+| `environment` | `develop`, `stage`, or `prod` |
 | `owner_team` | Team to notify on failure |
 
 ## Example (YAML)
@@ -30,7 +30,7 @@ feature: login
 test_name: Valid user login
 objective: Verify standard user can log in
 expected_outcome: Products page is visible
-environment: demo
+environment: develop
 owner_team: auth-frontend
 steps:
   - Fill username with standard_user

@@ -101,7 +101,7 @@ def structured_prompt_to_suite(prompt: StructuredTestPrompt) -> TestSuite:
         base_url=prompt.site_url.strip(),
         objective=prompt.objective.strip(),
         expected_outcome=prompt.expected_outcome.strip(),
-        environment=prompt.environment.strip(),
+        environment=prompt.environment.value,
         steps=steps,
     )
 

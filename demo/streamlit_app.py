@@ -51,7 +51,7 @@ with col_form:
         "test_name": "Valid user login",
         "objective": "Verify standard user can log in and see products page",
         "expected_outcome": "Products page is visible after login",
-        "environment": "demo",
+        "environment": "develop",
         "owner_team": "auth-frontend",
         "steps_text": "\n".join(
             [
@@ -79,7 +79,13 @@ with col_form:
     test_name = st.text_input("Test Name *", value=defaults["test_name"])
     objective = st.text_area("Test Objective *", value=defaults["objective"], height=68)
     expected_outcome = st.text_area("Expected Outcome *", value=defaults["expected_outcome"], height=68)
-    environment = st.text_input("Environment", value=defaults["environment"])
+    environment = st.selectbox(
+        "Environment",
+        options=["develop", "stage", "prod"],
+        index=["develop", "stage", "prod"].index(defaults["environment"])
+        if defaults["environment"] in ("develop", "stage", "prod")
+        else 0,
+    )
     owner_team = st.text_input("Owner Team (for notify)", value=defaults["owner_team"])
     steps_text = st.text_area(
         "Test Steps (one action per line) *",

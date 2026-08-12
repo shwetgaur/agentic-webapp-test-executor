@@ -4,7 +4,7 @@ feature: login
 test_name: Valid user login
 objective: Verify that a standard user can log in and reach the product inventory page
 expected_outcome: User sees the Products page after successful authentication
-environment: demo
+environment: develop
 owner_team: auth-frontend
 steps:
   - Fill username with standard_user

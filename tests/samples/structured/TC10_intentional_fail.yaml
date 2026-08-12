@@ -4,7 +4,7 @@ feature: validation
 test_name: Intentional failure for notify demo
 objective: Demonstrate failure reporting and team notification on invalid assertion
 expected_outcome: Test should fail and trigger notify agent
-environment: demo
+environment: develop
 owner_team: qa-platform
 steps:
   - Fill username with standard_user

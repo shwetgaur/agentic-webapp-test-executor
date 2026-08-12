@@ -47,8 +47,9 @@
     },
     "environment": {
       "type": "string",
-      "default": "demo",
-      "description": "Target environment label e.g. demo, staging"
+      "enum": ["develop", "stage", "prod"],
+      "default": "develop",
+      "description": "Target environment: develop, stage, or prod"
     },
     "owner_team": {
       "type": "string",

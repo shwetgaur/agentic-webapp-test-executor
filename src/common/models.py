@@ -37,6 +37,12 @@ class RunStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class TestEnvironment(str, Enum):
+    DEVELOP = "develop"
+    STAGE = "stage"
+    PROD = "prod"
+
+
 class Step(BaseModel):
     id: str
     action: StepAction
@@ -58,7 +64,7 @@ class StructuredTestPrompt(BaseModel):
     test_name: str = Field(..., min_length=1)
     objective: str = Field(..., min_length=1)
     expected_outcome: str = Field(..., min_length=1)
-    environment: str = Field(default="demo")
+    environment: TestEnvironment = Field(default=TestEnvironment.DEVELOP)
     owner_team: Optional[str] = None
     steps: list[str] = Field(..., min_length=1, description="Ordered test step lines")
 
