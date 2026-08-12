@@ -14,7 +14,7 @@ playwright install chromium
 streamlit run demo/streamlit_app.py
 ```
 
-## Structured test prompt (mentor requirement)
+## Structured test prompt 
 
 Testers must fill fixed fields — **no free-form-only input**:
 
