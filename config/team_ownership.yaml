@@ -1,0 +1,40 @@
+# Team ownership map for scrum-style failure notifications.
+# Key = module name used in test suites.
+# On FAIL, Notify Agent routes alert to the mapped team.
+
+version: 1
+default_team: qa-platform
+default_channel: console
+
+teams:
+  auth-frontend:
+    display_name: Auth Frontend Team
+    email: auth-frontend@example.com
+    slack_channel: "#auth-frontend"
+    webhook_env: SLACK_WEBHOOK_URL
+
+  catalog-frontend:
+    display_name: Catalog Frontend Team
+    email: catalog-frontend@example.com
+    slack_channel: "#catalog-frontend"
+    webhook_env: SLACK_WEBHOOK_URL
+
+  checkout-frontend:
+    display_name: Checkout Frontend Team
+    email: checkout-frontend@example.com
+    slack_channel: "#checkout-frontend"
+    webhook_env: SLACK_WEBHOOK_URL
+
+  qa-platform:
+    display_name: QA Platform Team
+    email: qa-platform@example.com
+    slack_channel: "#qa-failures"
+    webhook_env: SLACK_WEBHOOK_URL
+
+module_owners:
+  login: auth-frontend
+  search: catalog-frontend
+  form: catalog-frontend
+  navigation: catalog-frontend
+  checkout: checkout-frontend
+  validation: qa-platform

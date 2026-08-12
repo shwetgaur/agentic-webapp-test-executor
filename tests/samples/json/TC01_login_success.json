@@ -1,0 +1,51 @@
+{
+  "suite_id": "TC01_login_success",
+  "name": "Login success on Sauce Demo",
+  "module": "login",
+  "base_url": "https://www.saucedemo.com/",
+  "steps": [
+    {
+      "id": "s1",
+      "action": "goto",
+      "url": "https://www.saucedemo.com/",
+      "description": "Open Sauce Demo login page"
+    },
+    {
+      "id": "s2",
+      "action": "fill",
+      "selector": "#user-name",
+      "value": "standard_user",
+      "description": "Enter username"
+    },
+    {
+      "id": "s3",
+      "action": "fill",
+      "selector": "#password",
+      "value": "secret_sauce",
+      "description": "Enter password"
+    },
+    {
+      "id": "s4",
+      "action": "click",
+      "selector": "#login-button",
+      "description": "Click Login"
+    },
+    {
+      "id": "s5",
+      "action": "assert_url",
+      "expected": "inventory.html",
+      "description": "Verify inventory page URL"
+    },
+    {
+      "id": "s6",
+      "action": "assert_text",
+      "expected": "Products",
+      "description": "Verify Products heading is visible"
+    },
+    {
+      "id": "s7",
+      "action": "screenshot",
+      "description": "Capture final state"
+    }
+  ]
+}

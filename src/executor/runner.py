@@ -1,0 +1,190 @@
+"""Playwright-based step executor."""
+
+from __future__ import annotations
+
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
+
+from src.common.models import (
+    RunStatus,
+    RunSummary,
+    Step,
+    StepAction,
+    StepResult,
+    StepStatus,
+    TestReport,
+    TestSuite,
+)
+from src.common.settings import settings
+
+
+class PlaywrightExecutor:
+    def __init__(
+        self,
+        *,
+        headless: Optional[bool] = None,
+        screenshot_dir: str | Path = "data/screenshots",
+        timeout_ms: Optional[int] = None,
+    ) -> None:
+        self.headless = settings.headless if headless is None else headless
+        self.screenshot_dir = Path(screenshot_dir)
+        self.screenshot_dir.mkdir(parents=True, exist_ok=True)
+        self.timeout_ms = timeout_ms or settings.default_timeout_ms
+
+    def run(self, suite: TestSuite) -> TestReport:
+        run_id = f"run_{uuid.uuid4().hex[:10]}"
+        started = datetime.now(timezone.utc)
+        results: list[StepResult] = []
+        failed = False
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=self.headless)
+            context = browser.new_context()
+            page = context.new_page()
+            page.set_default_timeout(self.timeout_ms)
+
+            for step in suite.steps:
+                if failed:
+                    results.append(
+                        StepResult(
+                            step_id=step.id,
+                            action=step.action.value,
+                            description=step.description,
+                            status=StepStatus.SKIPPED,
+                            expected=step.expected,
+                        )
+                    )
+                    continue
+
+                step_result = self._execute_step(page, run_id, step)
+                results.append(step_result)
+                if step_result.status in (StepStatus.FAILED, StepStatus.ERROR):
+                    failed = True
+
+            context.close()
+            browser.close()
+
+        finished = datetime.now(timezone.utc)
+        passed = sum(1 for r in results if r.status == StepStatus.PASSED)
+        failed_n = sum(1 for r in results if r.status in (StepStatus.FAILED, StepStatus.ERROR))
+        skipped = sum(1 for r in results if r.status == StepStatus.SKIPPED)
+
+        status = RunStatus.PASSED if failed_n == 0 else RunStatus.FAILED
+        return TestReport(
+            run_id=run_id,
+            suite_id=suite.suite_id,
+            suite_name=suite.name,
+            module=suite.module,
+            site_url=suite.base_url,
+            objective=suite.objective,
+            expected_outcome=suite.expected_outcome,
+            environment=suite.environment,
+            status=status,
+            started_at=started,
+            finished_at=finished,
+            duration_ms=int((finished - started).total_seconds() * 1000),
+            summary=RunSummary(
+                total=len(results),
+                passed=passed,
+                failed=failed_n,
+                skipped=skipped,
+            ),
+            steps=results,
+        )
+
+    def _execute_step(self, page, run_id: str, step: Step) -> StepResult:
+        t0 = time.perf_counter()
+        screenshot_path = None
+        try:
+            actual = self._dispatch(page, step)
+            duration = int((time.perf_counter() - t0) * 1000)
+            return StepResult(
+                step_id=step.id,
+                action=step.action.value,
+                description=step.description,
+                status=StepStatus.PASSED,
+                expected=step.expected,
+                actual=actual,
+                duration_ms=duration,
+            )
+        except Exception as exc:  # noqa: BLE001 - collect any step failure
+            duration = int((time.perf_counter() - t0) * 1000)
+            try:
+                path = self.screenshot_dir / f"{run_id}_{step.id}.png"
+                page.screenshot(path=str(path), full_page=True)
+                screenshot_path = str(path)
+            except Exception:  # noqa: BLE001
+                screenshot_path = None
+            return StepResult(
+                step_id=step.id,
+                action=step.action.value,
+                description=step.description,
+                status=StepStatus.FAILED if isinstance(exc, (AssertionError, PlaywrightTimeoutError)) else StepStatus.ERROR,
+                expected=step.expected,
+                actual=None,
+                duration_ms=duration,
+                screenshot_path=screenshot_path,
+                error=str(exc),
+            )
+
+    def _dispatch(self, page, step: Step) -> str:
+        action = step.action
+        if action == StepAction.GOTO:
+            if not step.url:
+                raise ValueError("goto requires url")
+            page.goto(step.url)
+            return page.url
+        if action == StepAction.FILL:
+            if not step.selector:
+                raise ValueError("fill requires selector")
+            page.fill(step.selector, step.value or "")
+            return step.value or ""
+        if action == StepAction.CLICK:
+            if not step.selector:
+                raise ValueError("click requires selector")
+            page.click(step.selector)
+            return f"clicked:{step.selector}"
+        if action == StepAction.SELECT:
+            if not step.selector:
+                raise ValueError("select requires selector")
+            page.select_option(step.selector, label=step.value)
+            return step.value or ""
+        if action == StepAction.HOVER:
+            if not step.selector:
+                raise ValueError("hover requires selector")
+            page.hover(step.selector)
+            return f"hovered:{step.selector}"
+        if action == StepAction.PRESS_KEY:
+            page.keyboard.press(step.key or "Enter")
+            return step.key or "Enter"
+        if action == StepAction.WAIT:
+            page.wait_for_timeout(step.timeout_ms or 1000)
+            return f"waited:{step.timeout_ms or 1000}ms"
+        if action == StepAction.ASSERT_TEXT:
+            expected = step.expected or ""
+            locator = page.get_by_text(expected, exact=False)
+            if locator.count() == 0:
+                raise AssertionError(f"Text not found: {expected}")
+            return expected
+        if action == StepAction.ASSERT_URL:
+            expected = step.expected or ""
+            if expected not in page.url:
+                raise AssertionError(f"URL '{page.url}' does not contain '{expected}'")
+            return page.url
+        if action == StepAction.ASSERT_VISIBLE:
+            if not step.selector:
+                raise ValueError("assert_visible requires selector")
+            locator = page.locator(step.selector)
+            if not locator.is_visible():
+                raise AssertionError(f"Element not visible: {step.selector}")
+            return step.selector
+        if action == StepAction.SCREENSHOT:
+            # handled as success marker; caller may also screenshot on failure
+            return "screenshot-ok"
+        raise ValueError(f"Unsupported action: {action}")

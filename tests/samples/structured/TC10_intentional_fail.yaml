@@ -1,0 +1,13 @@
+test_id: TC10_intentional_fail
+site_url: https://www.saucedemo.com/
+feature: validation
+test_name: Intentional failure for notify demo
+objective: Demonstrate failure reporting and team notification on invalid assertion
+expected_outcome: Test should fail and trigger notify agent
+environment: demo
+owner_team: qa-platform
+steps:
+  - Fill username with standard_user
+  - Fill password with secret_sauce
+  - Click Login
+  - Verify text THIS_TEXT_DOES_NOT_EXIST is visible

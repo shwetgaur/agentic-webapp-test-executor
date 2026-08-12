@@ -1,0 +1,14 @@
+test_id: TC01_login_success
+site_url: https://www.saucedemo.com/
+feature: login
+test_name: Valid user login
+objective: Verify that a standard user can log in and reach the product inventory page
+expected_outcome: User sees the Products page after successful authentication
+environment: demo
+owner_team: auth-frontend
+steps:
+  - Fill username with standard_user
+  - Fill password with secret_sauce
+  - Click Login
+  - Verify URL contains inventory.html
+  - Verify text Products is visible

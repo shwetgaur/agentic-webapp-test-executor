@@ -1,0 +1,8 @@
+## TC01_login_success
+Module: login
+1. Open https://www.saucedemo.com/
+2. Fill username with standard_user
+3. Fill password with secret_sauce
+4. Click the Login button
+5. Verify URL contains inventory.html
+6. Verify text Products is visible

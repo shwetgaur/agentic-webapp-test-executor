@@ -1,0 +1,7 @@
+## TC10_intentional_fail_for_notify_demo
+Module: validation
+1. Open https://www.saucedemo.com/
+2. Fill username with standard_user
+3. Fill password with secret_sauce
+4. Click the Login button
+5. Verify text THIS_TEXT_DOES_NOT_EXIST_ON_PAGE is visible
