@@ -1,6 +1,5 @@
 # Agentic Web-App Test Executor (DS 1)
 
-**Dassault Systemes | Quality Engineering | B.Tech AIML AY 2026-27**
 
 Structured test prompt → Playwright execution → pass/fail report → team notification on failure.
 
