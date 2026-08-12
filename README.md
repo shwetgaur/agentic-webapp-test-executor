@@ -14,8 +14,6 @@ playwright install chromium
 streamlit run demo/streamlit_app.py
 ```
 
-See [docs/DEMO.md](docs/DEMO.md) for the 5-minute demo script.
-
 ## Structured test prompt (mentor requirement)
 
 Testers must fill fixed fields — **no free-form-only input**:
