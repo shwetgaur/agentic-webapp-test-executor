@@ -4,7 +4,7 @@
 
 Structured test prompt → Playwright execution → pass/fail report → team notification on failure.
 
-## MVP demo (tomorrow)
+## MVP demo 
 
 ```powershell
 python -m venv .venv
