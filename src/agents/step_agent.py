@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.agent.flexible_steps import normalize_llm_suite, suite_from_natural_steps
 from src.agent.structured_prompt import structured_prompt_to_suite
 from src.agents.llm_client import LLMClient
 from src.common.models import AgentTrace, StructuredTestPrompt, TestSuite
 
-_PLANNER_SYSTEM = """You are a QA test planner. Given a test objective and step list, return ONLY a JSON array of strings — one executable step per line.
-Use clear actions: Open URL, Fill field with value, Click button, Verify text X is visible, Verify URL contains fragment.
+_PLANNER_SYSTEM = """You are a QA test planner. The user writes natural-language test steps — keep their wording style.
+Return ONLY a JSON array of strings — one executable step per line.
+Preserve phrases like "verify url contains …", "verify that the X text is visible", "fill … with …".
+Add an Open URL step only if the list does not already start with navigation.
 Do not add markdown or explanation."""
 
-_GENERATOR_SYSTEM = """You are a test step generator. Convert test steps into a JSON TestSuite for browser automation.
+_GENERATOR_SYSTEM = """You are a test step generator. Convert natural-language test steps into JSON for browser automation.
 Return ONLY valid JSON with this shape:
 {
   "suite_id": "string",
@@ -23,7 +26,13 @@ Return ONLY valid JSON with this shape:
     {"id": "s1", "action": "goto|fill|click|select|assert_text|assert_url", "url": "...", "selector": "...", "value": "...", "expected": "...", "description": "..."}
   ]
 }
-Actions: goto needs url; fill/click/select need selector; assert_text/assert_url need expected."""
+
+CRITICAL rules for expected fields:
+- assert_url: expected must be ONLY the URL fragment to search for (e.g. "zoho.com"), NEVER include the word "contains".
+  Example: step "verify url contains zoho.com" -> {"action":"assert_url","expected":"zoho.com"}
+- assert_text: expected must be ONLY the visible text (e.g. "Zoho"), not the full sentence.
+  Example: step "verify that the zoho text is visible" -> {"action":"assert_text","expected":"Zoho"}
+- goto needs url; fill/click/select need selector; copy the original step text into description."""
 
 
 @dataclass
@@ -82,11 +91,12 @@ class StepAgent:
         if use_llm and self.llm.is_available():
             suite = self._generate_suite_llm(working_prompt)
             if suite:
+                suite = normalize_llm_suite(suite, working_prompt, source_lines=steps)
                 traces.append(
                     AgentTrace(
                         agent="step_agent",
                         phase="generator",
-                        detail=f"LLM generated TestSuite with {len(suite.steps)} steps",
+                        detail=f"LLM generated TestSuite with {len(suite.steps)} steps (normalized)",
                     )
                 )
                 return StepAgentResult(suite=suite, refined_steps=steps, traces=traces)
@@ -141,4 +151,8 @@ class StepAgent:
                 }
             )
         except Exception:
-            return None
+            # LLM JSON invalid — fall back to flexible natural-language parser.
+            try:
+                return suite_from_natural_steps(prompt, prompt.steps)
+            except ValueError:
+                return None
