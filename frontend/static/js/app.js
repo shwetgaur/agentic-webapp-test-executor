@@ -136,6 +136,16 @@ async function fetchMarkdown(runId) {
   return null;
 }
 
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  if (!text) return { data: null, raw: "" };
+  try {
+    return { data: JSON.parse(text), raw: text };
+  } catch {
+    return { data: null, raw: text };
+  }
+}
+
 async function runTest(e) {
   e.preventDefault();
   clearError();
@@ -164,9 +174,17 @@ async function runTest(e) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const { data, raw } = await parseJsonResponse(res);
     if (!res.ok) {
-      showError(data.detail || JSON.stringify(data, null, 2));
+      const detail = data?.detail;
+      const message = detail
+        ? (typeof detail === "string" ? detail : JSON.stringify(detail, null, 2))
+        : raw || `Request failed (${res.status})`;
+      showError(message);
+      return;
+    }
+    if (!data) {
+      showError(raw || "Empty response from server");
       return;
     }
     renderReport(data);

@@ -12,6 +12,8 @@ services:
         value: openai/gpt-oss-20b
       - key: HEADLESS
         value: "true"
+      - key: PLAYWRIGHT_NO_SANDBOX
+        value: "true"
       - key: NOTIFY_ENABLED
         value: "true"
       - key: NOTIFY_CHANNEL

@@ -10,9 +10,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import logging
+
 import yaml
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -34,6 +36,8 @@ SAMPLE_MAP = {
     "tc10": "TC10_intentional_fail.yaml",
 }
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,6 +47,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc) or exc.__class__.__name__},
+    )
+
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -79,12 +93,31 @@ class AgentRunRequest(BaseModel):
 
 
 def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
-    executor = PlaywrightExecutor(headless=headless)
-    report = executor.run(suite)
-    report = NotifyAgent().maybe_notify(report)
-    save_json_report(report)
-    save_markdown_report(report)
-    return report
+    try:
+        executor = PlaywrightExecutor(headless=headless)
+        report = executor.run(suite)
+        report = NotifyAgent().maybe_notify(report)
+        save_json_report(report)
+        save_markdown_report(report)
+        return report
+    except Exception as exc:
+        logger.exception("Suite execution failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _run_agents(body: AgentRunRequest) -> TestReport:
+    try:
+        return AgentOrchestrator(
+            headless=body.headless,
+            use_llm=body.use_llm,
+            use_discovery=body.use_discovery,
+            use_healer=body.use_healer,
+        ).run(body.prompt).report
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Agent pipeline failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/")
@@ -138,12 +171,15 @@ def run_from_text(body: TextRunRequest):
 def run_from_structured(body: StructuredRunRequest):
     try:
         if body.use_agents:
-            return AgentOrchestrator(
-                headless=body.headless,
-                use_llm=body.use_llm,
-                use_discovery=body.use_discovery,
-                use_healer=body.use_healer,
-            ).run(body.prompt).report
+            return _run_agents(
+                AgentRunRequest(
+                    prompt=body.prompt,
+                    headless=body.headless,
+                    use_llm=body.use_llm,
+                    use_discovery=body.use_discovery,
+                    use_healer=body.use_healer,
+                )
+            )
         suite = structured_prompt_to_suite(body.prompt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -152,15 +188,7 @@ def run_from_structured(body: StructuredRunRequest):
 
 @app.post("/api/v1/run/agents", response_model=TestReport)
 def run_from_agents(body: AgentRunRequest):
-    try:
-        return AgentOrchestrator(
-            headless=body.headless,
-            use_llm=body.use_llm,
-            use_discovery=body.use_discovery,
-            use_healer=body.use_healer,
-        ).run(body.prompt).report
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_agents(body)
 
 
 @app.post("/api/v1/run/json", response_model=TestReport)

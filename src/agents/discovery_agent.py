@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from src.common.models import AgentTrace, ModuleMap, Step, StepAction, TestSuite
+from src.executor.browser_launch import chromium_launch_kwargs
 
 
 @dataclass
@@ -37,14 +39,24 @@ class DiscoveryAgent:
             )
         ]
 
-        module_map = self._scan_site(site_url, feature)
-        traces.append(
-            AgentTrace(
-                agent="discovery_agent",
-                phase="scan",
-                detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s)",
+        try:
+            module_map = self._scan_site(site_url, feature)
+            traces.append(
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="scan",
+                    detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s)",
+                )
             )
-        )
+        except (PlaywrightError, OSError, RuntimeError, ValueError) as exc:
+            module_map = ModuleMap(site_url=site_url, feature=feature, elements={}, page_urls=[])
+            traces.append(
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="scan_skipped",
+                    detail=f"Discovery skipped: {exc}",
+                )
+            )
 
         enriched_steps = [self._enrich_step(step, module_map, traces) for step in suite.steps]
         enriched = suite.model_copy(update={"steps": enriched_steps})
@@ -62,7 +74,7 @@ class DiscoveryAgent:
         page_urls: list[str] = []
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=self.headless)
+            browser = p.chromium.launch(**chromium_launch_kwargs(headless=self.headless))
             page = browser.new_page()
             page.set_default_timeout(self.timeout_ms)
             page.goto(site_url)

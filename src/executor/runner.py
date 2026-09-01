@@ -8,9 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
+from src.executor.browser_launch import chromium_launch_kwargs
 from src.common.models import (
     RunStatus,
     RunSummary,
@@ -48,32 +50,59 @@ class PlaywrightExecutor:
         results: list[StepResult] = []
         failed = False
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=self.headless)
-            context = browser.new_context()
-            page = context.new_page()
-            page.set_default_timeout(self.timeout_ms)
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(**chromium_launch_kwargs(headless=self.headless))
+                context = browser.new_context()
+                page = context.new_page()
+                page.set_default_timeout(self.timeout_ms)
 
-            for step in suite.steps:
-                if failed:
-                    results.append(
-                        StepResult(
-                            step_id=step.id,
-                            action=step.action.value,
-                            description=step.description,
-                            status=StepStatus.SKIPPED,
-                            expected=step.expected,
+                for step in suite.steps:
+                    if failed:
+                        results.append(
+                            StepResult(
+                                step_id=step.id,
+                                action=step.action.value,
+                                description=step.description,
+                                status=StepStatus.SKIPPED,
+                                expected=step.expected,
+                            )
                         )
+                        continue
+
+                    step_result = self._execute_step(page, run_id, step, healer=healer)
+                    results.append(step_result)
+                    if step_result.status in (StepStatus.FAILED, StepStatus.ERROR):
+                        failed = True
+
+                context.close()
+                browser.close()
+        except (PlaywrightError, OSError, RuntimeError) as exc:
+            finished = datetime.now(timezone.utc)
+            return TestReport(
+                run_id=run_id,
+                suite_id=suite.suite_id,
+                suite_name=suite.name,
+                module=suite.module,
+                site_url=suite.base_url,
+                objective=suite.objective,
+                expected_outcome=suite.expected_outcome,
+                environment=suite.environment,
+                status=RunStatus.ERROR,
+                started_at=started,
+                finished_at=finished,
+                duration_ms=int((finished - started).total_seconds() * 1000),
+                summary=RunSummary(total=1, passed=0, failed=0, skipped=0),
+                steps=[
+                    StepResult(
+                        step_id="browser",
+                        action="launch",
+                        description="Browser launch or session setup",
+                        status=StepStatus.ERROR,
+                        error=str(exc),
                     )
-                    continue
-
-                step_result = self._execute_step(page, run_id, step, healer=healer)
-                results.append(step_result)
-                if step_result.status in (StepStatus.FAILED, StepStatus.ERROR):
-                    failed = True
-
-            context.close()
-            browser.close()
+                ],
+            )
 
         finished = datetime.now(timezone.utc)
         passed = sum(1 for r in results if r.status == StepStatus.PASSED)
