@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.agent.flexible_steps import (
+    clean_text_expected,
     clean_url_fragment,
     normalize_llm_suite,
     normalize_step,
@@ -79,6 +80,24 @@ def test_normalize_llm_suite_for_zoho_prompt():
     suite = normalize_llm_suite(llm_suite, prompt, source_lines=prompt.steps)
     assert suite.steps[1].expected == "zoho.com"
     assert suite.steps[2].expected == "zoho"
+
+
+def test_parse_verify_that_the_text_x_is_visible():
+    step = parse_flexible_line("s3", "verify that the text Projects is visible")
+    assert step is not None
+    assert step.action == StepAction.ASSERT_TEXT
+    assert step.expected == "Projects"
+
+
+def test_open_the_site_extracts_url():
+    step = parse_flexible_line("s1", "open the site https://www.zoho.com/projects")
+    assert step is not None
+    assert step.action == StepAction.GOTO
+    assert step.url == "https://www.zoho.com/projects"
+
+
+def test_clean_text_expected_strips_text_prefix():
+    assert clean_text_expected("text Projects") == "Projects"
 
 
 def test_suite_from_natural_steps_auto_opens_site():

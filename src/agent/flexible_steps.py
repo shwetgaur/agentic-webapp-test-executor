@@ -9,7 +9,8 @@ from src.common.models import Step, StepAction, StructuredTestPrompt, TestSuite
 
 _FILL_RE = re.compile(r"^(?:fill|enter|type)\s+(.+?)\s+with\s+(.+)$", re.I)
 _CLICK_RE = re.compile(r"^(?:click|press)\s+(?:the\s+)?(.+?)(?:\s+button|\s+link)?$", re.I)
-_OPEN_RE = re.compile(r"^(?:open|go to|navigate to|goto)\s+(.+)$", re.I)
+_OPEN_RE = re.compile(r"^(?:open|go to|navigate to|goto)(?:\s+the\s+site)?\s+(.+)$", re.I)
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"']+", re.I)
 _SELECT_RE = re.compile(r"^select\s+(.+?)\s+from\s+(?:the\s+)?(.+)$", re.I)
 
 _ASSERT_URL_RES = (
@@ -18,15 +19,30 @@ _ASSERT_URL_RES = (
 )
 
 _ASSERT_TEXT_RES = (
+    re.compile(r"^verify(?:\s+that)?\s+(?:the\s+)?text\s+(.+?)\s+is\s+visible$", re.I),
     re.compile(r"^verify(?:\s+that)?\s+text\s+(.+?)\s+is\s+visible$", re.I),
     re.compile(r"^verify(?:\s+that)?\s+(?:the\s+)?(.+?)\s+text\s+is\s+visible$", re.I),
-    re.compile(r"^verify(?:\s+that)?\s+(?:the\s+)?(.+?)\s+is\s+visible$", re.I),
+    re.compile(r"^verify(?:\s+that)?\s+(?:the\s+)?(?!text\s)(.+?)\s+is\s+visible$", re.I),
     re.compile(r"(?:the\s+)?text\s+['\"]?([^'\"]+)['\"]?\s+is\s+visible", re.I),
 )
 
 
-def _clean(text: str) -> str:
-    return text.strip().strip('"').strip("'")
+def clean_text_expected(value: str) -> str:
+    """Strip wrapper words LLMs or broad regexes may leave in assert_text values."""
+    text = _clean(value)
+    lowered = text.lower()
+    if lowered.startswith("the text "):
+        text = text[len("the text ") :]
+    elif lowered.startswith("text "):
+        text = text[len("text ") :]
+    return _clean(text)
+
+
+def _extract_url(raw: str) -> str | None:
+    match = _URL_IN_TEXT.search(raw)
+    if not match:
+        return None
+    return match.group(0).rstrip(".,)'\"")
 
 
 def clean_url_fragment(value: str) -> str:
@@ -47,6 +63,10 @@ def clean_url_fragment(value: str) -> str:
     return _clean(fragment)
 
 
+def _clean(text: str) -> str:
+    return text.strip().strip('"').strip("'")
+
+
 def parse_flexible_line(step_id: str, raw: str) -> Step | None:
     """Parse a natural-language step line into a Step, or None if unrecognized."""
     raw = raw.strip()
@@ -54,7 +74,9 @@ def parse_flexible_line(step_id: str, raw: str) -> Step | None:
         return None
 
     if m := _OPEN_RE.match(raw):
-        return Step(id=step_id, action=StepAction.GOTO, url=_clean(m.group(1)), description=raw)
+        tail = _clean(m.group(1))
+        url = _extract_url(tail) or _extract_url(raw) or tail
+        return Step(id=step_id, action=StepAction.GOTO, url=url, description=raw)
     if m := _FILL_RE.match(raw):
         field, value = _clean(m.group(1)), _clean(m.group(2))
         return Step(
@@ -145,7 +167,7 @@ def normalize_step(step: Step, *, source_line: str | None = None) -> Step:
         expected = step.expected or ""
         if parsed and parsed.action == StepAction.ASSERT_TEXT and parsed.expected:
             expected = parsed.expected
-        updates["expected"] = _clean(expected)
+        updates["expected"] = clean_text_expected(expected)
 
     elif parsed and parsed.action == step.action:
         if parsed.selector and not step.selector:

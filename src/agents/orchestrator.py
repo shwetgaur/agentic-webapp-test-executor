@@ -7,7 +7,15 @@ from dataclasses import dataclass, field
 from src.agents.discovery_agent import DiscoveryAgent
 from src.agents.step_agent import StepAgent
 from src.agents.test_report_agent import TestReportAgent
-from src.common.models import AgentTrace, StructuredTestPrompt, TestReport, TestSuite
+from src.common.models import AgentTrace, StepAction, StructuredTestPrompt, TestReport, TestSuite
+
+_INTERACTIVE_ACTIONS = frozenset(
+    {StepAction.FILL, StepAction.CLICK, StepAction.SELECT, StepAction.HOVER}
+)
+
+
+def _suite_needs_discovery(suite: TestSuite) -> bool:
+    return any(step.action in _INTERACTIVE_ACTIONS for step in suite.steps)
 
 
 @dataclass
@@ -45,10 +53,18 @@ class AgentOrchestrator:
         all_traces.extend(step_out.traces)
         suite = step_out.suite
 
-        if self.use_discovery:
+        if self.use_discovery and _suite_needs_discovery(suite):
             disc_out = DiscoveryAgent(headless=self.headless).run(suite, prompt.feature)
             all_traces.extend(disc_out.traces)
             suite = disc_out.suite
+        elif self.use_discovery:
+            all_traces.append(
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="skipped",
+                    detail="No fill/click/select steps — discovery not needed for this run",
+                )
+            )
 
         report_out = TestReportAgent(
             headless=self.headless,
