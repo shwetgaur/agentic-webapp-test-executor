@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: starter
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /health
+    healthCheckPath: /ping
     envVars:
       - key: LLM_PROVIDER
         value: groq

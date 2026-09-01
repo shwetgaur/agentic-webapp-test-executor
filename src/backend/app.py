@@ -129,12 +129,20 @@ def index():
 
 
 @app.get("/health")
+@app.head("/health")
 def health():
     return {
         "status": "ok",
         "app": settings.app_name,
         "llm_available": bool(settings.groq_api_key or settings.openai_api_key),
     }
+
+
+@app.get("/ping")
+@app.head("/ping")
+def ping():
+    """Minimal liveness probe for UptimeRobot / Render (plain body contains 'ok')."""
+    return PlainTextResponse("ok", media_type="text/plain")
 
 
 @app.get("/api/v1/samples")
