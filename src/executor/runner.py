@@ -13,6 +13,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from src.executor.browser_launch import chromium_launch_kwargs
+from src.executor.navigation import navigate
 from src.common.models import (
     RunStatus,
     RunSummary,
@@ -209,7 +210,7 @@ class PlaywrightExecutor:
         if action == StepAction.GOTO:
             if not step.url:
                 raise ValueError("goto requires url")
-            page.goto(step.url)
+            navigate(page, step.url)
             return page.url
         if action == StepAction.FILL:
             if not step.selector:
@@ -240,8 +241,11 @@ class PlaywrightExecutor:
         if action == StepAction.ASSERT_TEXT:
             expected = step.expected or ""
             locator = page.get_by_text(expected, exact=False)
-            if locator.count() == 0:
-                raise AssertionError(f"Text not found: {expected}")
+            try:
+                locator.first.wait_for(state="visible", timeout=self.timeout_ms)
+            except PlaywrightTimeoutError as exc:
+                if locator.count() == 0:
+                    raise AssertionError(f"Text not found: {expected}") from exc
             return expected
         if action == StepAction.ASSERT_URL:
             expected = step.expected or ""

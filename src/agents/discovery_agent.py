@@ -10,6 +10,7 @@ from playwright.sync_api import sync_playwright
 
 from src.common.models import AgentTrace, ModuleMap, Step, StepAction, TestSuite
 from src.executor.browser_launch import chromium_launch_kwargs
+from src.executor.navigation import navigate
 
 
 @dataclass
@@ -77,7 +78,7 @@ class DiscoveryAgent:
             browser = p.chromium.launch(**chromium_launch_kwargs(headless=self.headless))
             page = browser.new_page()
             page.set_default_timeout(self.timeout_ms)
-            page.goto(site_url)
+            navigate(page, site_url)
             page_urls.append(page.url)
 
             for loc in page.locator("input, textarea, select").all():

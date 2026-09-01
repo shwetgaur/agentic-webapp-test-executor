@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     slack_webhook_url: str | None = None
 
     headless: bool = True
-    default_timeout_ms: int = 15000
+    default_timeout_ms: int = 30000
+    navigation_timeout_ms: int = 45000
+    goto_wait_until: str = "domcontentloaded"
 
 
 settings = Settings()

@@ -14,6 +14,10 @@ services:
         value: "true"
       - key: PLAYWRIGHT_NO_SANDBOX
         value: "true"
+      - key: NAVIGATION_TIMEOUT_MS
+        value: "45000"
+      - key: GOTO_WAIT_UNTIL
+        value: domcontentloaded
       - key: NOTIFY_ENABLED
         value: "true"
       - key: NOTIFY_CHANNEL
