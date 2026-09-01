@@ -12,10 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.agent.structured_prompt import structured_prompt_to_suite
+from src.agents.orchestrator import AgentOrchestrator
 from src.common.models import StructuredTestPrompt
-from src.executor.runner import PlaywrightExecutor
-from src.notify.agent import NotifyAgent
 from src.reporting.writer import save_json_report, save_markdown_report
 
 SAMPLES = ROOT / "tests" / "samples" / "structured"
@@ -94,6 +92,13 @@ with col_form:
         help="Examples: Fill username with X | Click Login | Verify text Products is visible",
     )
     headless = st.checkbox("Headless browser", value=True)
+    use_agents = st.checkbox(
+        "Run 3-agent pipeline (Step → Discovery → Test & Report)",
+        value=True,
+        help="Agent 1: plan/parse steps · Agent 2: discover modules · Agent 3: run, heal, report, notify",
+    )
+    use_llm = st.checkbox("Use LLM in Step Agent (if API key set)", value=False)
+    use_healer = st.checkbox("Enable Healer on step failure", value=True)
 
     run_btn = st.button("Run Test", type="primary", use_container_width=True)
 
@@ -114,20 +119,37 @@ with col_result:
                 owner_team=owner_team or None,
                 steps=steps,
             )
-            suite = structured_prompt_to_suite(prompt)
         except Exception as exc:
             st.error(f"Validation error: {exc}")
             st.stop()
 
-        with st.spinner("Running Playwright executor..."):
+        with st.spinner("Running 3-agent pipeline..." if use_agents else "Running Playwright executor..."):
             try:
-                report = PlaywrightExecutor(headless=headless).run(suite)
-                report = NotifyAgent().maybe_notify(report)
-                json_path = save_json_report(report)
-                md_path = save_markdown_report(report)
+                if use_agents:
+                    result = AgentOrchestrator(
+                        headless=headless,
+                        use_llm=use_llm,
+                        use_discovery=True,
+                        use_healer=use_healer,
+                    ).run(prompt)
+                    report = result.report
+                else:
+                    from src.agent.structured_prompt import structured_prompt_to_suite
+                    from src.executor.runner import PlaywrightExecutor
+                    from src.notify.agent import NotifyAgent
+
+                    suite = structured_prompt_to_suite(prompt)
+                    report = PlaywrightExecutor(headless=headless).run(suite)
+                    report = NotifyAgent().maybe_notify(report)
+                    json_path = save_json_report(report)
+                    md_path = save_markdown_report(report)
             except Exception as exc:
                 st.error(f"Execution failed: {exc}")
                 st.stop()
+
+        if use_agents:
+            json_path = Path("data/reports") / f"{report.run_id}.json"
+            md_path = Path("data/reports") / f"{report.run_id}.md"
 
         status_color = "green" if report.status.value == "passed" else "red"
         st.markdown(f"### Status: :{status_color}[{report.status.value.upper()}]")
@@ -146,6 +168,13 @@ with col_result:
                 st.caption(f"Error: {step.error}")
             if step.screenshot_path and Path(step.screenshot_path).exists():
                 st.image(step.screenshot_path, caption=f"Screenshot {step.step_id}", width=400)
+
+        st.markdown("#### Agent Pipeline")
+        if report.agent_traces:
+            for t in report.agent_traces:
+                st.write(f"**{t.agent}** · `{t.phase}` — {t.detail}")
+        else:
+            st.caption("_Legacy run (single executor, no agent traces)._")
 
         st.markdown("#### Notification")
         if report.notify.triggered:

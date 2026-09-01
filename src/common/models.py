@@ -106,6 +106,23 @@ class NotifyInfo(BaseModel):
     ticket_id: Optional[str] = None
 
 
+class AgentTrace(BaseModel):
+    """Audit line for one agent action in the 3-agent pipeline."""
+
+    agent: str
+    phase: str
+    detail: str
+
+
+class ModuleMap(BaseModel):
+    """Discovered UI elements for a feature on a target site."""
+
+    site_url: str
+    feature: str
+    elements: dict[str, str] = Field(default_factory=dict)
+    page_urls: list[str] = Field(default_factory=list)
+
+
 class TestReport(BaseModel):
     run_id: str
     suite_id: str
@@ -122,3 +139,4 @@ class TestReport(BaseModel):
     summary: RunSummary
     steps: list[StepResult]
     notify: NotifyInfo = Field(default_factory=NotifyInfo)
+    agent_traces: list[AgentTrace] = Field(default_factory=list)

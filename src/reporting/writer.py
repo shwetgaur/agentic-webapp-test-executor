@@ -60,6 +60,15 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
     lines.append(f"- Team: `{n.team}`")
     lines.append(f"- Channel: `{n.channel}`")
     lines.append(f"- Ticket: `{n.ticket_id}`")
+
+    if report.agent_traces:
+        lines.extend(["", "## Agent Pipeline", ""])
+        lines.append("| Agent | Phase | Detail |")
+        lines.append("|-------|-------|--------|")
+        for t in report.agent_traces:
+            detail = (t.detail or "").replace("|", "\\|")
+            lines.append(f"| {t.agent} | {t.phase} | {detail} |")
+
     lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")

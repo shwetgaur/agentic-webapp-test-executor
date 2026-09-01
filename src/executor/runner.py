@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -37,7 +37,12 @@ class PlaywrightExecutor:
         self.screenshot_dir.mkdir(parents=True, exist_ok=True)
         self.timeout_ms = timeout_ms or settings.default_timeout_ms
 
-    def run(self, suite: TestSuite) -> TestReport:
+    def run(
+        self,
+        suite: TestSuite,
+        *,
+        healer: Callable[[Step, object, str], Step | None] | None = None,
+    ) -> TestReport:
         run_id = f"run_{uuid.uuid4().hex[:10]}"
         started = datetime.now(timezone.utc)
         results: list[StepResult] = []
@@ -62,7 +67,7 @@ class PlaywrightExecutor:
                     )
                     continue
 
-                step_result = self._execute_step(page, run_id, step)
+                step_result = self._execute_step(page, run_id, step, healer=healer)
                 results.append(step_result)
                 if step_result.status in (StepStatus.FAILED, StepStatus.ERROR):
                     failed = True
@@ -98,22 +103,59 @@ class PlaywrightExecutor:
             steps=results,
         )
 
-    def _execute_step(self, page, run_id: str, step: Step) -> StepResult:
+    def _execute_step(
+        self,
+        page,
+        run_id: str,
+        step: Step,
+        *,
+        healer: Callable[[Step, object, str], Step | None] | None = None,
+    ) -> StepResult:
         t0 = time.perf_counter()
         screenshot_path = None
+        current = step
+        healed = False
         try:
-            actual = self._dispatch(page, step)
+            actual = self._dispatch(page, current)
             duration = int((time.perf_counter() - t0) * 1000)
+            desc = current.description
+            if healed and desc:
+                desc = f"{desc} [healed]"
+            elif healed:
+                desc = "[healed]"
             return StepResult(
                 step_id=step.id,
-                action=step.action.value,
-                description=step.description,
+                action=current.action.value,
+                description=desc,
                 status=StepStatus.PASSED,
-                expected=step.expected,
+                expected=current.expected,
                 actual=actual,
                 duration_ms=duration,
             )
         except Exception as exc:  # noqa: BLE001 - collect any step failure
+            err_str = str(exc)
+            if healer and not healed:
+                alt = healer(step, page, err_str)
+                if alt:
+                    healed = True
+                    current = alt
+                    try:
+                        actual = self._dispatch(page, current)
+                        duration = int((time.perf_counter() - t0) * 1000)
+                        desc = f"{(current.description or step.description or '')} [healed]".strip()
+                        return StepResult(
+                            step_id=step.id,
+                            action=current.action.value,
+                            description=desc or "[healed]",
+                            status=StepStatus.PASSED,
+                            expected=current.expected,
+                            actual=actual,
+                            duration_ms=duration,
+                        )
+                    except Exception as retry_exc:
+                        exc = retry_exc
+                        err_str = str(exc)
+
             duration = int((time.perf_counter() - t0) * 1000)
             try:
                 path = self.screenshot_dir / f"{run_id}_{step.id}.png"

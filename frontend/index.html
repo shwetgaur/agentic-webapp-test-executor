@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agentic Web-App Test Executor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">DS1</span>
+        <div>
+          <h1>Agentic Web-App Test Executor</h1>
+          <p>Dassault Systèmes · Quality Engineering · 3-Agent Pipeline</p>
+        </div>
+      </div>
+      <div class="topbar-meta">
+        <span id="health-badge" class="badge badge-muted">Checking…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel panel-form">
+        <div class="panel-head">
+          <h2>Structured Test Prompt</h2>
+          <p>Fixed fields required — site, feature, objective, steps.</p>
+        </div>
+
+        <div class="toolbar">
+          <label for="sample-select">Load sample</label>
+          <select id="sample-select">
+            <option value="">— Select —</option>
+            <option value="tc01">TC01 Login PASS</option>
+            <option value="tc10">TC10 Intentional FAIL</option>
+          </select>
+        </div>
+
+        <form id="test-form" class="form-grid">
+          <label>
+            Test ID *
+            <input id="test_id" name="test_id" required />
+          </label>
+          <label>
+            Environment
+            <select id="environment" name="environment">
+              <option value="develop">develop</option>
+              <option value="stage">stage</option>
+              <option value="prod">prod</option>
+            </select>
+          </label>
+          <label class="span-2">
+            Site URL *
+            <input id="site_url" name="site_url" type="url" required />
+          </label>
+          <label>
+            Feature / Module *
+            <input id="feature" name="feature" required />
+          </label>
+          <label>
+            Owner Team
+            <input id="owner_team" name="owner_team" />
+          </label>
+          <label class="span-2">
+            Test Name *
+            <input id="test_name" name="test_name" required />
+          </label>
+          <label class="span-2">
+            Objective *
+            <textarea id="objective" name="objective" rows="2" required></textarea>
+          </label>
+          <label class="span-2">
+            Expected Outcome *
+            <textarea id="expected_outcome" name="expected_outcome" rows="2" required></textarea>
+          </label>
+          <label class="span-2">
+            Test Steps (one per line) *
+            <textarea id="steps" name="steps" rows="8" required></textarea>
+          </label>
+
+          <div class="options span-2">
+            <label class="check"><input type="checkbox" id="use_agents" checked /> 3-agent pipeline</label>
+            <label class="check"><input type="checkbox" id="use_llm" checked /> LLM Step Agent</label>
+            <label class="check"><input type="checkbox" id="use_discovery" checked /> Module Discovery</label>
+            <label class="check"><input type="checkbox" id="use_healer" checked /> Healer on failure</label>
+            <label class="check"><input type="checkbox" id="headless" checked /> Headless browser</label>
+          </div>
+
+          <button type="submit" class="btn-primary span-2" id="run-btn">Run Test</button>
+        </form>
+      </section>
+
+      <section class="panel panel-result">
+        <div class="panel-head">
+          <h2>Execution Result</h2>
+          <p id="result-hint">Submit a structured prompt to run the pipeline.</p>
+        </div>
+
+        <div id="loading" class="loading hidden">
+          <div class="spinner"></div>
+          <span>Running agents & Playwright…</span>
+        </div>
+
+        <div id="result-empty" class="empty-state">
+          <p>Agent 1 → Step intake · Agent 2 → Site discovery · Agent 3 → Run, report, notify</p>
+        </div>
+
+        <div id="result-content" class="hidden">
+          <div id="status-banner" class="status-banner"></div>
+
+          <div class="metrics">
+            <div><span>Run ID</span><code id="run-id"></code></div>
+            <div><span>Duration</span><strong id="duration"></strong></div>
+            <div><span>Summary</span><strong id="summary"></strong></div>
+          </div>
+
+          <h3>Step Results</h3>
+          <div id="step-list" class="step-list"></div>
+
+          <h3>Agent Pipeline</h3>
+          <div id="agent-traces" class="trace-list"></div>
+
+          <h3>Notification</h3>
+          <div id="notify-box" class="notify-box"></div>
+
+          <div class="download-row">
+            <button type="button" class="btn-secondary" id="download-json">Download JSON Report</button>
+            <button type="button" class="btn-secondary" id="download-md">Download Markdown</button>
+          </div>
+        </div>
+
+        <div id="error-box" class="error-box hidden"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Agent 1: Test Step · Agent 2: Module Discovery · Agent 3: Test &amp; Report</span>
+      <a href="https://github.com/shwetgaur/agentic-webapp-test-executor" target="_blank" rel="noopener">GitHub</a>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>

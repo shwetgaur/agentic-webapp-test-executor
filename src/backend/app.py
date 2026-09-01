@@ -1,26 +1,51 @@
-"""Minimal FastAPI app for Phase-1/2 demos."""
+"""Minimal FastAPI app — API + web UI."""
 
 from __future__ import annotations
 
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import yaml
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.agent.parser import parse_plain_text_case
-from src.agent.structured_prompt import parse_structured_yaml_or_json, structured_prompt_to_suite
+from src.agent.structured_prompt import structured_prompt_to_suite
+from src.agents.orchestrator import AgentOrchestrator
 from src.common.models import StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
 from src.reporting.writer import save_json_report, save_markdown_report
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
+FRONTEND_DIR = ROOT / "frontend"
+STATIC_DIR = FRONTEND_DIR / "static"
+SAMPLES_DIR = ROOT / "tests" / "samples" / "structured"
+
+SAMPLE_MAP = {
+    "tc01": "TC01_login_success.yaml",
+    "tc10": "TC10_intentional_fail.yaml",
+}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for sub in ("data/reports", "data/screenshots"):
+        Path(sub).mkdir(parents=True, exist_ok=True)
+    yield
+
+
+app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 class TextRunRequest(BaseModel):
@@ -39,6 +64,18 @@ class JsonRunRequest(BaseModel):
 class StructuredRunRequest(BaseModel):
     prompt: StructuredTestPrompt
     headless: bool = True
+    use_agents: bool = False
+    use_llm: bool = True
+    use_discovery: bool = True
+    use_healer: bool = True
+
+
+class AgentRunRequest(BaseModel):
+    prompt: StructuredTestPrompt
+    headless: bool = True
+    use_llm: bool = True
+    use_discovery: bool = True
+    use_healer: bool = True
 
 
 def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
@@ -50,9 +87,37 @@ def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
     return report
 
 
+@app.get("/")
+def index():
+    index_path = FRONTEND_DIR / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="UI not found")
+    return FileResponse(index_path)
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": settings.app_name}
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "llm_available": bool(settings.groq_api_key or settings.openai_api_key),
+    }
+
+
+@app.get("/api/v1/samples")
+def list_samples():
+    return [{"id": k, "file": v} for k, v in SAMPLE_MAP.items()]
+
+
+@app.get("/api/v1/samples/{sample_id}")
+def get_sample(sample_id: str):
+    filename = SAMPLE_MAP.get(sample_id.lower())
+    if not filename:
+        raise HTTPException(status_code=404, detail="Sample not found")
+    path = SAMPLES_DIR / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Sample file missing")
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
 @app.post("/api/v1/run/text", response_model=TestReport)
@@ -72,10 +137,30 @@ def run_from_text(body: TextRunRequest):
 @app.post("/api/v1/run/structured", response_model=TestReport)
 def run_from_structured(body: StructuredRunRequest):
     try:
+        if body.use_agents:
+            return AgentOrchestrator(
+                headless=body.headless,
+                use_llm=body.use_llm,
+                use_discovery=body.use_discovery,
+                use_healer=body.use_healer,
+            ).run(body.prompt).report
         suite = structured_prompt_to_suite(body.prompt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _execute_suite(suite, body.headless)
+
+
+@app.post("/api/v1/run/agents", response_model=TestReport)
+def run_from_agents(body: AgentRunRequest):
+    try:
+        return AgentOrchestrator(
+            headless=body.headless,
+            use_llm=body.use_llm,
+            use_discovery=body.use_discovery,
+            use_healer=body.use_healer,
+        ).run(body.prompt).report
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/run/json", response_model=TestReport)
@@ -83,9 +168,17 @@ def run_from_json(body: JsonRunRequest):
     return _execute_suite(body.suite, body.headless)
 
 
-@app.get("/api/v1/reports/{run_id}")
+@app.get("/api/v1/reports/{run_id}", response_model=TestReport)
 def get_report(run_id: str):
     path = Path("data/reports") / f"{run_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Report not found")
     return TestReport.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/v1/reports/{run_id}/markdown")
+def get_report_markdown(run_id: str):
+    path = Path("data/reports") / f"{run_id}.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Markdown report not found")
+    return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/markdown")
