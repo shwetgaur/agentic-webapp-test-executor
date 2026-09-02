@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from playwright.sync_api import sync_playwright
 
 from src.executor.browser_launch import chromium_launch_kwargs
 from src.executor.navigation import navigate
+from src.executor.url_assertions import url_matches
 from src.common.models import (
     RunStatus,
     RunSummary,
@@ -25,6 +27,15 @@ from src.common.models import (
     TestSuite,
 )
 from src.common.settings import settings
+
+
+def _is_auth_submit_click(step: Step) -> bool:
+    desc = (step.description or "").lower()
+    sel = (step.selector or "").lower()
+    return any(token in desc for token in ("sign in", "log in", "login")) or "signin" in sel or sel in {
+        "#nextbtn",
+        "#login-button",
+    }
 
 
 class PlaywrightExecutor:
@@ -221,6 +232,12 @@ class PlaywrightExecutor:
             if not step.selector:
                 raise ValueError("click requires selector")
             page.click(step.selector)
+            if _is_auth_submit_click(step):
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=self.timeout_ms)
+                    page.wait_for_url(re.compile(r"(?!/signin(?:[/?#]|$))", re.I), timeout=self.timeout_ms)
+                except PlaywrightTimeoutError:
+                    pass
             return f"clicked:{step.selector}"
         if action == StepAction.SELECT:
             if not step.selector:
@@ -249,7 +266,7 @@ class PlaywrightExecutor:
             return expected
         if action == StepAction.ASSERT_URL:
             expected = step.expected or ""
-            if expected not in page.url:
+            if not url_matches(page.url, expected):
                 raise AssertionError(f"URL '{page.url}' does not contain '{expected}'")
             return page.url
         if action == StepAction.ASSERT_VISIBLE:
