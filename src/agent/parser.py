@@ -30,34 +30,7 @@ def _clean(text: str) -> str:
     return text.strip().strip('"').strip("'")
 
 
-def _guess_selector(label: str) -> str:
-    """Best-effort selector guess for Sauce Demo / generic demos."""
-    raw = label.strip().lower()
-    mapping = {
-        "username": "#user-name",
-        "password": "#password",
-        "login": "#login-button",
-        "login button": "#login-button",
-        "shopping cart link": ".shopping_cart_link",
-        "shopping cart": ".shopping_cart_link",
-        "checkout": "#checkout",
-        "continue": "#continue",
-        "menu button": "#react-burger-menu-btn",
-        "logout": "#logout_sidebar_link",
-        "first name": "#first-name",
-        "last name": "#last-name",
-        "zip/postal code": "#postal-code",
-        "zip": "#postal-code",
-        "remove": "button.cart_button",
-        "product sort dropdown": "[data-test='product-sort-container']",
-    }
-    if raw in mapping:
-        return mapping[raw]
-    # Add-to-cart phrases
-    if "add to cart" in raw:
-        return "button.btn_inventory"
-    # Fallback: text selector
-    return f"text={label.strip()}"
+from src.agent.selectors import best_guess_selector as _guess_selector
 
 
 def parse_plain_text_case(

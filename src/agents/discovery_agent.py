@@ -28,20 +28,26 @@ class DiscoveryAgent:
         self.timeout_ms = timeout_ms
 
     def run(self, suite: TestSuite, feature: str) -> DiscoveryAgentResult:
-        site_url = suite.base_url or ""
-        if not site_url:
-            raise ValueError("Discovery requires suite.base_url")
+        scan_urls = _discovery_scan_urls(suite)
+        if not scan_urls:
+            raise ValueError("Discovery requires at least one URL from goto steps or base_url")
 
         traces: list[AgentTrace] = [
             AgentTrace(
                 agent="discovery_agent",
                 phase="start",
-                detail=f"Scanning {site_url} for feature '{feature}'",
+                detail=f"Scanning {len(scan_urls)} page(s) for feature '{feature}': {', '.join(scan_urls)}",
             )
         ]
 
+        elements: dict[str, str] = {}
+        page_urls: list[str] = []
         try:
-            module_map = self._scan_site(site_url, feature)
+            for url in scan_urls:
+                page_map = self._scan_site(url, feature, _suite_has_login_steps(suite))
+                elements.update(page_map.elements)
+                page_urls.extend(page_map.page_urls)
+            module_map = ModuleMap(site_url=scan_urls[0], feature=feature, elements=elements, page_urls=page_urls)
             traces.append(
                 AgentTrace(
                     agent="discovery_agent",
@@ -50,7 +56,7 @@ class DiscoveryAgent:
                 )
             )
         except (PlaywrightError, OSError, RuntimeError, ValueError) as exc:
-            module_map = ModuleMap(site_url=site_url, feature=feature, elements={}, page_urls=[])
+            module_map = ModuleMap(site_url=scan_urls[0], feature=feature, elements={}, page_urls=[])
             traces.append(
                 AgentTrace(
                     agent="discovery_agent",
@@ -70,7 +76,7 @@ class DiscoveryAgent:
         )
         return DiscoveryAgentResult(suite=enriched, module_map=module_map, traces=traces)
 
-    def _scan_site(self, site_url: str, feature: str) -> ModuleMap:
+    def _scan_site(self, site_url: str, feature: str, has_login_steps: bool) -> ModuleMap:
         elements: dict[str, str] = {}
         page_urls: list[str] = []
 
@@ -105,17 +111,19 @@ class DiscoveryAgent:
                 if el_id:
                     elements[self._norm(el_id)] = sel
 
-            if feature.lower() in ("login", "auth"):
-                for key in ("username", "user-name", "password", "login"):
-                    if key not in elements:
-                        guess = {
-                            "username": "#user-name",
-                            "user-name": "#user-name",
-                            "password": "#password",
-                            "login": "#login-button",
-                        }.get(key)
-                        if guess and page.locator(guess).count():
-                            elements[key] = guess
+            if feature.lower() in ("login", "auth") or has_login_steps:
+                login_guesses = {
+                    "username": "#user-name",
+                    "user-name": "#user-name",
+                    "email": "#login_id",
+                    "e-mail": "#login_id",
+                    "password": "#password",
+                    "login": "#login-button",
+                    "sign in": "#nextbtn",
+                }
+                for key, guess in login_guesses.items():
+                    if key not in elements and page.locator(guess).count():
+                        elements[key] = guess
 
             browser.close()
 
@@ -196,3 +204,30 @@ class DiscoveryAgent:
         if aria:
             labels.append(aria)
         return labels
+
+
+def _suite_has_login_steps(suite: TestSuite) -> bool:
+    for step in suite.steps:
+        if step.action != StepAction.FILL:
+            continue
+        hint = (step.description or "").lower()
+        if any(token in hint for token in ("email", "password", "username", "login")):
+            return True
+    return False
+
+
+def _discovery_scan_urls(suite: TestSuite) -> list[str]:
+    """Scan every goto target so auth pages are discovered even when base_url differs."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    for step in suite.steps:
+        if step.action == StepAction.GOTO and step.url:
+            key = step.url.rstrip("/")
+            if key not in seen:
+                urls.append(step.url)
+                seen.add(key)
+    if suite.base_url:
+        key = suite.base_url.rstrip("/")
+        if key not in seen:
+            urls.append(suite.base_url)
+    return urls

@@ -6,6 +6,7 @@ import json
 import re
 from typing import Optional
 
+from src.agent.selectors import login_field_selector_candidates
 from src.agents.llm_client import LLMClient
 from src.common.models import AgentTrace, Step, StepAction
 
@@ -61,6 +62,28 @@ class HealerAgent:
     def _heal_rules(self, step: Step, page) -> Optional[Step]:
         label = self._label_from_step(step)
         if not label:
+            return None
+
+        if step.action == StepAction.FILL:
+            for sel in login_field_selector_candidates(label):
+                try:
+                    loc = page.locator(sel).first
+                    if loc.count() and loc.is_visible():
+                        return step.model_copy(update={"selector": sel})
+                except Exception:
+                    continue
+            try:
+                loc = page.get_by_label(re.compile(label, re.I))
+                if loc.count() and loc.first.is_visible():
+                    return step.model_copy(update={"selector": f"text={label}"})
+            except Exception:
+                pass
+            try:
+                loc = page.get_by_placeholder(re.compile(label, re.I))
+                if loc.count() and loc.first.is_visible():
+                    return step.model_copy(update={"selector": f"text={label}"})
+            except Exception:
+                pass
             return None
 
         candidates = [
