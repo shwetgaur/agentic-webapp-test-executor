@@ -239,3 +239,14 @@ def get_report_log(run_id: str):
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{run_id}.log"'},
     )
+
+
+@app.get("/api/v1/screenshots/{filename}")
+def get_screenshot(filename: str):
+    """Serve failure screenshots saved during test runs."""
+    if not filename.endswith(".png") or ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid screenshot filename")
+    path = Path("data/screenshots") / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    return FileResponse(path, media_type="image/png")

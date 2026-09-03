@@ -186,6 +186,13 @@ function downloadBlob(content, filename, mime) {
   }, 250);
 }
 
+function screenshotUrl(path) {
+  if (!path) return null;
+  if (path.startsWith("/api/")) return path;
+  const name = path.split(/[/\\]/).pop();
+  return name ? `/api/v1/screenshots/${name}` : null;
+}
+
 function renderReport(report) {
   lastReport = report;
   lastLog = renderLogFromReport(report);
@@ -223,6 +230,16 @@ function renderReport(report) {
       err.className = "step-error";
       err.textContent = step.error;
       div.appendChild(err);
+    }
+    const shotUrl = screenshotUrl(step.screenshot_path);
+    if (shotUrl) {
+      const shot = document.createElement("a");
+      shot.className = "step-screenshot";
+      shot.href = shotUrl;
+      shot.target = "_blank";
+      shot.rel = "noopener";
+      shot.textContent = "View failure screenshot";
+      div.appendChild(shot);
     }
     stepList.appendChild(div);
   }

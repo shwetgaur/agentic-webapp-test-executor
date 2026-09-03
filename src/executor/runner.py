@@ -242,9 +242,10 @@ class PlaywrightExecutor:
                         exc = retry_exc
 
             try:
-                path = self.screenshot_dir / f"{run_id}_{step.id}.png"
+                filename = f"{run_id}_{step.id}.png"
+                path = self.screenshot_dir / filename
                 page.screenshot(path=str(path), full_page=True)
-                screenshot_path = str(path)
+                screenshot_path = f"/api/v1/screenshots/{filename}"
             except Exception:  # noqa: BLE001
                 screenshot_path = None
             return _finish(
