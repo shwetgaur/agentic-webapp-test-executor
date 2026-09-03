@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 LOGIN_FIELD_SELECTORS: dict[str, list[str]] = {
-    "email": ["#login_id", "input[type='email']", "input[name='email']", "input[name='login_id']"],
-    "e-mail": ["#login_id", "input[type='email']", "input[name='email']"],
+    "email": ["#email", "input[type='email']", "input[name='email']", "#login_id", "input[name='login_id']"],
+    "e-mail": ["#email", "input[type='email']", "input[name='email']", "#login_id"],
     "username": ["#user-name", "#login_id", "input[name='username']", "input[type='email']"],
     "user name": ["#user-name", "#login_id"],
     "password": ["#password", "input[type='password']", "input[name='password']"],
-    "sign in": ["#nextbtn", "#signin", "button[type='submit']", "input[type='submit']"],
+    "sign in": ["button[type='submit']", "#nextbtn", "#signin", "input[type='submit']"],
     "login": ["#login-button", "#nextbtn", "button[type='submit']"],
 }
 

@@ -86,6 +86,10 @@ class DiscoveryAgent:
             page.set_default_timeout(self.timeout_ms)
             navigate(page, site_url)
             page_urls.append(page.url)
+            try:
+                page.wait_for_selector("input, button, a", timeout=self.timeout_ms)
+            except PlaywrightError:
+                pass
 
             for loc in page.locator("input, textarea, select").all():
                 sel = self._selector_for_locator(loc)

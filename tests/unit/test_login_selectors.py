@@ -9,7 +9,7 @@ from src.common.models import Step, StepAction, TestSuite
 
 
 def test_email_guess_uses_login_id_not_text():
-    assert _guess_selector("email") == "#login_id"
+    assert _guess_selector("email") == "#email"
     assert "#login_id" in login_field_selector_candidates("email")
 
 

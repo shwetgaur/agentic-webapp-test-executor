@@ -86,6 +86,17 @@ class HealerAgent:
                 pass
             return None
 
+        if step.action == StepAction.CLICK:
+            label_lower = label.lower()
+            if any(token in label_lower for token in ("sign in", "log in", "login")):
+                for sel in ("button[type='submit']", "input[type='submit']"):
+                    try:
+                        loc = page.locator(sel).first
+                        if loc.count() and loc.is_visible():
+                            return step.model_copy(update={"selector": sel})
+                    except Exception:
+                        continue
+
         candidates = [
             f"text={label}",
             f"text={label.title()}",

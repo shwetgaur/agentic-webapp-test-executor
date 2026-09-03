@@ -34,6 +34,7 @@ SAMPLES_DIR = ROOT / "tests" / "samples" / "structured"
 SAMPLE_MAP = {
     "tc01": "TC01_login_success.yaml",
     "tc10": "TC10_intentional_fail.yaml",
+    "cv01": "CV_test_login_1.yaml",
 }
 
 logger = logging.getLogger(__name__)

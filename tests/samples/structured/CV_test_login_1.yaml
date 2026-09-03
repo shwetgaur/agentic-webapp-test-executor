@@ -1,0 +1,14 @@
+test_id: CV_test_login_1
+site_url: https://fs-blind.vercel.app/login
+feature: login
+test_name: Campus Voice login to feed
+objective: Verify home feed is visible for authenticated user
+expected_outcome: User reaches feed after sign-in
+environment: develop
+owner_team: auth-frontend
+steps:
+  - open https://fs-blind.vercel.app/login
+  - fill email with YOUR_EMAIL@sitpune.edu.in
+  - fill password with YOUR_PASSWORD
+  - click Sign in
+  - verify url contains feed

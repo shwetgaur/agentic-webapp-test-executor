@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -35,7 +34,38 @@ def _is_auth_submit_click(step: Step) -> bool:
     return any(token in desc for token in ("sign in", "log in", "login")) or "signin" in sel or sel in {
         "#nextbtn",
         "#login-button",
+        "button[type='submit']",
     }
+
+
+def _wait_for_auth_navigation(page, prior_url: str, timeout_ms: int) -> None:
+    """Wait for SPA login redirects (e.g. /login -> /feed)."""
+    normalized_prior = prior_url.rstrip("/")
+    try:
+        page.wait_for_url(
+            lambda url: url.rstrip("/") != normalized_prior,
+            timeout=timeout_ms,
+        )
+    except PlaywrightTimeoutError:
+        pass
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+    except PlaywrightTimeoutError:
+        pass
+
+
+def _wait_for_url_match(page, expected: str, timeout_ms: int) -> str:
+    """Poll until page URL matches expected fragment or timeout."""
+    deadline = time.perf_counter() + (timeout_ms / 1000)
+    last_url = page.url
+    while time.perf_counter() < deadline:
+        last_url = page.url
+        if url_matches(last_url, expected):
+            return last_url
+        page.wait_for_timeout(300)
+    if not url_matches(last_url, expected):
+        raise AssertionError(f"URL '{last_url}' does not contain '{expected}'")
+    return last_url
 
 
 class PlaywrightExecutor:
@@ -231,13 +261,10 @@ class PlaywrightExecutor:
         if action == StepAction.CLICK:
             if not step.selector:
                 raise ValueError("click requires selector")
+            prior_url = page.url
             page.click(step.selector)
             if _is_auth_submit_click(step):
-                try:
-                    page.wait_for_load_state("domcontentloaded", timeout=self.timeout_ms)
-                    page.wait_for_url(re.compile(r"(?!/signin(?:[/?#]|$))", re.I), timeout=self.timeout_ms)
-                except PlaywrightTimeoutError:
-                    pass
+                _wait_for_auth_navigation(page, prior_url, self.timeout_ms)
             return f"clicked:{step.selector}"
         if action == StepAction.SELECT:
             if not step.selector:
@@ -266,9 +293,7 @@ class PlaywrightExecutor:
             return expected
         if action == StepAction.ASSERT_URL:
             expected = step.expected or ""
-            if not url_matches(page.url, expected):
-                raise AssertionError(f"URL '{page.url}' does not contain '{expected}'")
-            return page.url
+            return _wait_for_url_match(page, expected, self.timeout_ms)
         if action == StepAction.ASSERT_VISIBLE:
             if not step.selector:
                 raise ValueError("assert_visible requires selector")
