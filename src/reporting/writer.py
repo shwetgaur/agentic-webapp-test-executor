@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.common.models import TestReport
+
+
+def _fmt_ts(dt: datetime | None) -> str:
+    if not dt:
+        return "n/a"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def save_json_report(report: TestReport, out_dir: str | Path = "data/reports") -> Path:
@@ -43,15 +52,16 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
         "",
         "## Step Results",
         "",
-        "| Step | Action | Status | Expected | Actual / Error | Screenshot |",
-        "|------|--------|--------|----------|----------------|------------|",
+        "| Step | Action | Status | Started | Finished | Duration (ms) | Expected | Actual / Error | Screenshot |",
+        "|------|--------|--------|---------|----------|--------------:|----------|----------------|------------|",
     ]
     for s in report.steps:
         err = s.error or s.actual or ""
         err = err.replace("|", "\\|")
         shot = s.screenshot_path or ""
         lines.append(
-            f"| {s.step_id} | {s.action} | {s.status.value} | {s.expected or ''} | {err} | {shot} |"
+            f"| {s.step_id} | {s.action} | {s.status.value} | {_fmt_ts(s.started_at)} | "
+            f"{_fmt_ts(s.finished_at)} | {s.duration_ms} | {s.expected or ''} | {err} | {shot} |"
         )
 
     lines.extend(["", "## Notification", ""])
@@ -63,11 +73,11 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
 
     if report.agent_traces:
         lines.extend(["", "## Agent Pipeline", ""])
-        lines.append("| Agent | Phase | Detail |")
-        lines.append("|-------|-------|--------|")
+        lines.append("| Timestamp | Agent | Phase | Detail |")
+        lines.append("|-----------|-------|-------|--------|")
         for t in report.agent_traces:
             detail = (t.detail or "").replace("|", "\\|")
-            lines.append(f"| {t.agent} | {t.phase} | {detail} |")
+            lines.append(f"| {_fmt_ts(t.timestamp)} | {t.agent} | {t.phase} | {detail} |")
 
     lines.append("")
 

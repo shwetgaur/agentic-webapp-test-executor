@@ -8,6 +8,7 @@ from src.agents.healer import HealerAgent
 from src.common.models import AgentTrace, TestReport, TestSuite
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
+from src.reporting.detailed_log import save_detailed_log
 from src.reporting.writer import save_json_report, save_markdown_report
 
 
@@ -67,15 +68,19 @@ class TestReportAgent:
             )
 
         if self.save_reports:
-            save_json_report(report)
-            save_markdown_report(report)
             traces.append(
                 AgentTrace(
                     agent="test_report_agent",
                     phase="report",
-                    detail=f"Saved report {report.run_id}",
+                    detail=f"Persisting report {report.run_id}",
                 )
             )
 
         report = report.model_copy(update={"agent_traces": traces})
+
+        if self.save_reports:
+            save_json_report(report)
+            save_markdown_report(report)
+            save_detailed_log(report)
+
         return TestReportAgentResult(report=report, traces=traces)

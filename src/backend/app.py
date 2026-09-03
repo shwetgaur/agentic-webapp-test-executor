@@ -25,6 +25,7 @@ from src.common.models import StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
+from src.reporting.detailed_log import save_detailed_log
 from src.reporting.writer import save_json_report, save_markdown_report
 
 FRONTEND_DIR = ROOT / "frontend"
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    for sub in ("data/reports", "data/screenshots"):
+    for sub in ("data/reports", "data/screenshots", "data/logs"):
         Path(sub).mkdir(parents=True, exist_ok=True)
     yield
 
@@ -100,6 +101,7 @@ def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
         report = NotifyAgent().maybe_notify(report)
         save_json_report(report)
         save_markdown_report(report)
+        save_detailed_log(report)
         return report
     except Exception as exc:
         logger.exception("Suite execution failed")
@@ -219,3 +221,11 @@ def get_report_markdown(run_id: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Markdown report not found")
     return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/markdown")
+
+
+@app.get("/api/v1/reports/{run_id}/log")
+def get_report_log(run_id: str):
+    path = Path("data/logs") / f"{run_id}.log"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Detailed log not found")
+    return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/plain")

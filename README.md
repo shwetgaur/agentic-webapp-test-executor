@@ -42,7 +42,8 @@ Details: [docs/STRUCTURED_PROMPT.md](docs/STRUCTURED_PROMPT.md)
 ## Documentation
 
 - [Deploy on Render](docs/DEPLOY_RENDER.md) — Docker + Playwright production deploy
-- [MVP Specification](docs/MVP_SPECIFICATION.md) — professional MVP document (scope, architecture, roadmap)
+- [MVP Specification (Phase-1)](docs/MVP_SPECIFICATION.md) — Phase-1 baseline document
+- [Phase-2 Specification](docs/PHASE2_SPECIFICATION.md) — 3-agent pipeline, web UI, cloud deploy
 - [Demo Prep & Q&A](docs/DEMO_PREP.md) — demo script, mentor questions, PPT alignment
 
 ## CLI

@@ -101,6 +101,7 @@ class PlaywrightExecutor:
 
                 for step in suite.steps:
                     if failed:
+                        skip_at = datetime.now(timezone.utc)
                         results.append(
                             StepResult(
                                 step_id=step.id,
@@ -108,6 +109,9 @@ class PlaywrightExecutor:
                                 description=step.description,
                                 status=StepStatus.SKIPPED,
                                 expected=step.expected,
+                                started_at=skip_at,
+                                finished_at=skip_at,
+                                duration_ms=0,
                             )
                         )
                         continue
@@ -141,6 +145,9 @@ class PlaywrightExecutor:
                         action="launch",
                         description="Browser launch or session setup",
                         status=StepStatus.ERROR,
+                        started_at=started,
+                        finished_at=finished,
+                        duration_ms=int((finished - started).total_seconds() * 1000),
                         error=str(exc),
                     )
                 ],
@@ -182,26 +189,36 @@ class PlaywrightExecutor:
         *,
         healer: Callable[[Step, object, str], Step | None] | None = None,
     ) -> StepResult:
+        started_at = datetime.now(timezone.utc)
         t0 = time.perf_counter()
         screenshot_path = None
         current = step
         healed = False
+
+        def _finish(**kwargs) -> StepResult:
+            finished_at = datetime.now(timezone.utc)
+            duration = kwargs.pop("duration_ms", int((time.perf_counter() - t0) * 1000))
+            return StepResult(
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration,
+                **kwargs,
+            )
+
         try:
             actual = self._dispatch(page, current)
-            duration = int((time.perf_counter() - t0) * 1000)
             desc = current.description
             if healed and desc:
                 desc = f"{desc} [healed]"
             elif healed:
                 desc = "[healed]"
-            return StepResult(
+            return _finish(
                 step_id=step.id,
                 action=current.action.value,
                 description=desc,
                 status=StepStatus.PASSED,
                 expected=current.expected,
                 actual=actual,
-                duration_ms=duration,
             )
         except Exception as exc:  # noqa: BLE001 - collect any step failure
             err_str = str(exc)
@@ -212,36 +229,31 @@ class PlaywrightExecutor:
                     current = alt
                     try:
                         actual = self._dispatch(page, current)
-                        duration = int((time.perf_counter() - t0) * 1000)
                         desc = f"{(current.description or step.description or '')} [healed]".strip()
-                        return StepResult(
+                        return _finish(
                             step_id=step.id,
                             action=current.action.value,
                             description=desc or "[healed]",
                             status=StepStatus.PASSED,
                             expected=current.expected,
                             actual=actual,
-                            duration_ms=duration,
                         )
                     except Exception as retry_exc:
                         exc = retry_exc
-                        err_str = str(exc)
 
-            duration = int((time.perf_counter() - t0) * 1000)
             try:
                 path = self.screenshot_dir / f"{run_id}_{step.id}.png"
                 page.screenshot(path=str(path), full_page=True)
                 screenshot_path = str(path)
             except Exception:  # noqa: BLE001
                 screenshot_path = None
-            return StepResult(
+            return _finish(
                 step_id=step.id,
                 action=step.action.value,
                 description=step.description,
                 status=StepStatus.FAILED if isinstance(exc, (AssertionError, PlaywrightTimeoutError)) else StepStatus.ERROR,
                 expected=step.expected,
                 actual=None,
-                duration_ms=duration,
                 screenshot_path=screenshot_path,
                 error=str(exc),
             )

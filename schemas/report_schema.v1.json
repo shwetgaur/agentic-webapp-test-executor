@@ -37,6 +37,8 @@
           "status": { "type": "string", "enum": ["passed", "failed", "skipped", "error"] },
           "expected": { "type": ["string", "null"] },
           "actual": { "type": ["string", "null"] },
+          "started_at": { "type": ["string", "null"], "format": "date-time" },
+          "finished_at": { "type": ["string", "null"], "format": "date-time" },
           "duration_ms": { "type": "integer" },
           "screenshot_path": { "type": ["string", "null"] },
           "error": { "type": ["string", "null"] }

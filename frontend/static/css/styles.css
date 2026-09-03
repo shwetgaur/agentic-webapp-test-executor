@@ -344,6 +344,13 @@ h3 {
   font-family: var(--mono);
 }
 
+.step-meta {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
 .trace-item {
   font-size: 0.82rem;
 }

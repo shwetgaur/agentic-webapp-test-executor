@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class StepAction(str, Enum):
@@ -87,6 +91,8 @@ class StepResult(BaseModel):
     status: StepStatus
     expected: Optional[str] = None
     actual: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
     duration_ms: int = 0
     screenshot_path: Optional[str] = None
     error: Optional[str] = None
@@ -112,6 +118,7 @@ class AgentTrace(BaseModel):
     agent: str
     phase: str
     detail: str
+    timestamp: datetime = Field(default_factory=_utc_now)
 
 
 class ModuleMap(BaseModel):

@@ -2,6 +2,7 @@
 
 let lastReport = null;
 let lastMarkdown = null;
+let lastLog = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -72,6 +73,16 @@ function clearError() {
   $("error-box").classList.add("hidden");
 }
 
+function formatTs(iso) {
+  if (!iso) return "n/a";
+  try {
+    const d = new Date(iso);
+    return d.toISOString().replace("T", " ").replace("Z", " UTC");
+  } catch {
+    return iso;
+  }
+}
+
 function renderReport(report) {
   lastReport = report;
   clearError();
@@ -95,7 +106,11 @@ function renderReport(report) {
     const st = step.status;
     div.className = `step-item step-${st === "passed" ? "pass" : st === "skipped" ? "skip" : "fail"}`;
     const icon = st === "passed" ? "✓" : st === "skipped" ? "○" : "✗";
-    div.innerHTML = `<strong>${icon} ${step.step_id}</strong> · ${step.action}<br>${step.description || ""}`;
+    const timing =
+      step.started_at || step.duration_ms != null
+        ? `<div class="step-meta">${formatTs(step.started_at)} → ${formatTs(step.finished_at)} · ${step.duration_ms ?? 0} ms</div>`
+        : "";
+    div.innerHTML = `<strong>${icon} ${step.step_id}</strong> · ${step.action}<br>${step.description || ""}${timing}`;
     if (step.error) {
       const err = document.createElement("div");
       err.className = "step-error";
@@ -114,7 +129,8 @@ function renderReport(report) {
     for (const t of agentTraces) {
       const div = document.createElement("div");
       div.className = "trace-item";
-      div.innerHTML = `<strong>${t.agent}</strong> · <code>${t.phase}</code> — ${t.detail}`;
+      div.innerHTML = `<strong>${t.agent}</strong> · <code>${t.phase}</code> — ${t.detail}` +
+        (t.timestamp ? `<div class="step-meta">${formatTs(t.timestamp)}</div>` : "");
       traces.appendChild(div);
     }
   }
@@ -132,6 +148,12 @@ function renderReport(report) {
 
 async function fetchMarkdown(runId) {
   const res = await fetch(`/api/v1/reports/${runId}/markdown`);
+  if (res.ok) return res.text();
+  return null;
+}
+
+async function fetchLog(runId) {
+  const res = await fetch(`/api/v1/reports/${runId}/log`);
   if (res.ok) return res.text();
   return null;
 }
@@ -189,6 +211,7 @@ async function runTest(e) {
     }
     renderReport(data);
     lastMarkdown = await fetchMarkdown(data.run_id);
+    lastLog = await fetchLog(data.run_id);
   } catch (err) {
     showError(String(err));
   } finally {
@@ -214,10 +237,20 @@ function downloadMd() {
   a.click();
 }
 
+function downloadLog() {
+  if (!lastLog) return;
+  const blob = new Blob([lastLog], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${lastReport.run_id}.log`;
+  a.click();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   checkHealth();
   $("test-form").addEventListener("submit", runTest);
   $("sample-select").addEventListener("change", (e) => loadSample(e.target.value));
   $("download-json").addEventListener("click", downloadJson);
   $("download-md").addEventListener("click", downloadMd);
+  $("download-log").addEventListener("click", downloadLog);
 });
