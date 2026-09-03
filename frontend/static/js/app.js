@@ -83,6 +83,92 @@ function formatTs(iso) {
   }
 }
 
+function formatTsLog(iso) {
+  if (!iso) return "n/a";
+  try {
+    const d = new Date(iso);
+    return d.toISOString().replace(/\.\d{3}Z$/, (m) => m.slice(0, 4) + "Z");
+  } catch {
+    return iso;
+  }
+}
+
+function renderLogFromReport(report) {
+  const s = report.summary || {};
+  const lines = [
+    "=".repeat(80),
+    `TEST RUN LOG — ${report.run_id}`,
+    `Suite: ${report.suite_name || report.suite_id} (${report.suite_id})`,
+    `Module / Feature: ${report.module || "n/a"}`,
+    `Site URL: ${report.site_url || "n/a"}`,
+    `Environment: ${report.environment || "n/a"}`,
+    `Objective: ${report.objective || "n/a"}`,
+    `Expected Outcome: ${report.expected_outcome || "n/a"}`,
+    `Status: ${(report.status || "").toUpperCase()}`,
+    `Run started:  ${formatTsLog(report.started_at)}`,
+    `Run finished: ${formatTsLog(report.finished_at)}`,
+    `Total duration: ${report.duration_ms} ms`,
+    `Summary: ${s.passed ?? 0} passed / ${s.failed ?? 0} failed / ${s.skipped ?? 0} skipped (total ${s.total ?? 0})`,
+    "=".repeat(80),
+    "",
+  ];
+
+  const traces = report.agent_traces || [];
+  if (traces.length) {
+    lines.push("--- Agent Pipeline ---", "");
+    for (const t of traces) {
+      lines.push(`[${formatTsLog(t.timestamp)}] ${t.agent}.${t.phase} — ${t.detail}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("--- Step Execution (timestamped) ---", "");
+  for (const step of report.steps || []) {
+    lines.push(
+      `[${formatTsLog(step.started_at)}] STEP ${step.step_id} START  ${step.action}  ${step.description || ""}`.trimEnd()
+    );
+    const parts = [
+      `status=${step.status}`,
+      `duration=${step.duration_ms ?? 0}ms`,
+      `finished=${formatTsLog(step.finished_at)}`,
+    ];
+    if (step.expected) parts.push(`expected=${step.expected}`);
+    if (step.actual) parts.push(`actual=${step.actual}`);
+    if (step.error) parts.push(`error=${step.error}`);
+    if (step.screenshot_path) parts.push(`screenshot=${step.screenshot_path}`);
+    lines.push(`[${formatTsLog(step.finished_at)}] STEP ${step.step_id} END    ${parts.join(" | ")}`);
+    lines.push("");
+  }
+
+  const n = report.notify || {};
+  lines.push(
+    "--- Notification ---",
+    `Triggered: ${n.triggered ?? false}`,
+    `Team: ${n.team || "n/a"}`,
+    `Channel: ${n.channel || "n/a"}`,
+    `Ticket: ${n.ticket_id || "n/a"}`,
+    "",
+    "=".repeat(80),
+    `END OF LOG — ${report.run_id}`,
+    "=".repeat(80),
+    ""
+  );
+  return lines.join("\n");
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function renderReport(report) {
   lastReport = report;
   clearError();
@@ -220,30 +306,47 @@ async function runTest(e) {
 }
 
 function downloadJson() {
-  if (!lastReport) return;
-  const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${lastReport.run_id}.json`;
-  a.click();
+  if (!lastReport) {
+    showError("Run a test first to download the JSON report.");
+    return;
+  }
+  downloadBlob(JSON.stringify(lastReport, null, 2), `${lastReport.run_id}.json`, "application/json");
 }
 
 function downloadMd() {
-  if (!lastMarkdown) return;
-  const blob = new Blob([lastMarkdown], { type: "text/markdown" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${lastReport.run_id}.md`;
-  a.click();
+  if (!lastReport) {
+    showError("Run a test first to download the Markdown report.");
+    return;
+  }
+  if (!lastMarkdown) {
+    showError("Markdown report is not available for this run.");
+    return;
+  }
+  downloadBlob(lastMarkdown, `${lastReport.run_id}.md`, "text/markdown");
 }
 
-function downloadLog() {
-  if (!lastLog) return;
-  const blob = new Blob([lastLog], { type: "text/plain" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${lastReport.run_id}.log`;
-  a.click();
+async function downloadLog() {
+  if (!lastReport) {
+    showError("Run a test first to download the detailed log.");
+    return;
+  }
+
+  let logText = lastLog;
+  if (!logText) {
+    logText = await fetchLog(lastReport.run_id);
+  }
+  if (!logText) {
+    logText = renderLogFromReport(lastReport);
+  }
+
+  if (!logText) {
+    showError("Could not build detailed log for this run.");
+    return;
+  }
+
+  lastLog = logText;
+  clearError();
+  downloadBlob(logText, `${lastReport.run_id}.log`, "text/plain;charset=utf-8");
 }
 
 document.addEventListener("DOMContentLoaded", () => {

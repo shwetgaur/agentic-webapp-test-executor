@@ -250,17 +250,145 @@ The web UI shows step timing inline and offers **Download Detailed Log**. JSON r
 | `TC01_login_success` | Sauce Demo | PASS | All steps green | Baseline happy-path login |
 | `TC10_intentional_fail` | Sauce Demo | FAIL | Assert fails | Report + notify demo |
 | `CV_test_login_1` | Campus Voice (Vercel) | PASS* | Redirect to `/feed` | Real deployed app; institute email login |
-| Zoho TC01–TC06 | zoho.com | PASS/FAIL | Marketing + login flows | Industry site validation (manual prompts) |
+| `ZOHO_TC04_login_success` | Zoho Accounts | PASS* | Redirect after sign-in | Type into UI at demo (see §9.1) |
+| `ZOHO_TC05_projects_after_login` | Zoho Projects | PASS* | Projects page after auth | Type into UI at demo (see §9.2) |
 
-\*Requires valid `@sitpune.edu.in` credentials in step lines.
+\*Requires valid credentials in step lines at run time.
 
-**Load sample (UI):** TC01 Login PASS · TC10 Intentional FAIL · CV01 Campus Voice Login
+**Load sample (UI):** TC01 Login PASS · TC10 Intentional FAIL · CV01 Campus Voice Login  
+(Zoho scenarios are **not** in the dropdown — type them live during the demo.)
 
-**CLI:**
+**CLI (optional):**
 
 ```bash
 python scripts/run_suite.py --structured tests/samples/structured/TC01_login_success.yaml --agents
 python scripts/run_suite.py --structured tests/samples/structured/CV_test_login_1.yaml --agents
+```
+
+---
+
+### 9.1 Demo script — Zoho sign-in (type into web UI)
+
+Use this when you want to show the mentor that testers **manually enter** a structured prompt — do **not** use Load sample.
+
+**Before Run Test**
+
+| Toggle | Setting |
+|---|---|
+| Load sample | — Select — (leave empty) |
+| 3-agent pipeline | ON |
+| LLM Step Agent | ON |
+| Module Discovery | ON |
+| Healer on failure | ON |
+| Headless browser | ON |
+
+**Type each form field**
+
+| Form field | Value to type |
+|---|---|
+| Test ID | `ZOHO_TC04_login_success` |
+| Environment | `develop` |
+| Site URL | `https://accounts.zoho.com/signin` |
+| Feature / Module | `login` |
+| Owner Team | *(leave blank or type `auth-frontend`)* |
+| Test Name | `Valid Zoho user sign-in` |
+| Objective | `Verify user can sign in to Zoho account` |
+| Expected Outcome | `User is redirected after successful login` |
+
+**Test Steps** — one line per row in the steps box:
+
+```
+open https://accounts.zoho.com/signin
+fill email with YOUR_ZOHO_EMAIL
+fill password with YOUR_ZOHO_PASSWORD
+click Sign in
+verify url contains zoho.com
+```
+
+Replace `YOUR_ZOHO_EMAIL` and `YOUR_ZOHO_PASSWORD` with your test account before clicking **Run Test**.
+
+**What to say while typing:**  
+*"Every field is fixed by contract — site, feature, objective, outcome, steps. Step lines can be natural language; Agent 1 interprets them."*
+
+**Expected result:** PASS — login steps green; URL assert passes after redirect.
+
+---
+
+### 9.2 Demo script — Zoho login + Projects page (type into web UI)
+
+Shows **multi-URL flow**: sign-in on `accounts.zoho.com`, then open Projects marketing page.
+
+**Before Run Test** — same toggles as §9.1 (all ON, no sample loaded).
+
+**Type each form field**
+
+| Form field | Value to type |
+|---|---|
+| Test ID | `ZOHO_TC05_projects_after_login` |
+| Environment | `develop` |
+| Site URL | `https://www.zoho.com/projects/` |
+| Feature / Module | `login` |
+| Owner Team | *(leave blank)* |
+| Test Name | `Projects page after Zoho login` |
+| Objective | `Verify authenticated user can open Zoho Projects marketing page` |
+| Expected Outcome | `Projects URL and visible Projects-related text` |
+
+**Test Steps** — one line per row:
+
+```
+open https://accounts.zoho.com/signin
+fill email with YOUR_ZOHO_EMAIL
+fill password with YOUR_ZOHO_PASSWORD
+click Sign in
+open https://www.zoho.com/projects/
+verify url contains zoho.com/projects
+verify text Projects is visible
+```
+
+**What to say while typing:**  
+*"Discovery scans both URLs we open — sign-in page for email/password selectors, Projects page for content. We use the real marketing URL, not projects.zoho.com which redirects."*
+
+**Expected result:** PASS — all steps green; Projects text visible on marketing page.
+
+---
+
+### 9.3 Optional — Zoho public pages (no login, type into UI)
+
+Quick industry-site checks without credentials. Same toggles as above.
+
+**ZOHO_TC01 — Homepage**
+
+| Form field | Value |
+|---|---|
+| Test ID | `ZOHO_TC01_homepage` |
+| Site URL | `https://www.zoho.com/` |
+| Feature / Module | `navigation` |
+| Test Name | `Zoho homepage loads` |
+| Objective | `Verify Zoho marketing homepage opens and shows brand content` |
+| Expected Outcome | `Homepage loads with Zoho-related visible text` |
+
+Steps:
+```
+verify url contains zoho.com
+verify that the zoho text is visible
+```
+
+**ZOHO_TC02 — Projects marketing (no login)**
+
+| Form field | Value |
+|---|---|
+| Test ID | `ZOHO_TC02_projects_marketing` |
+| Site URL | `https://www.zoho.com/projects/` |
+| Feature / Module | `navigation` |
+| Test Name | `Zoho Projects product page` |
+| Objective | `Verify Zoho Projects marketing page is reachable` |
+| Expected Outcome | `URL and page content confirm Projects section` |
+
+Steps:
+```
+open the site https://www.zoho.com/projects/
+verify that the url contains project
+verify that the text Projects is visible
 ```
 
 ---
@@ -320,11 +448,15 @@ Open **http://localhost:8000** → Load sample → Run Test.
 
 Env vars: `GROQ_API_KEY`, `LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-20b`, `HEADLESS=true`, `PLAYWRIGHT_NO_SANDBOX=true`
 
-### Recommended demo sequence
+### Recommended demo sequence (live typing)
 
-1. **TC01** — Sauce Demo PASS (fast baseline)  
-2. **CV01** — Campus Voice login → feed (real app)  
-3. **TC10** — intentional FAIL → show notify ticket + agent traces  
+1. **TC01** — Load sample → PASS (fast baseline, ~30 s)  
+2. **ZOHO_TC04** — §9.1 — type all fields + login steps → PASS (industry app)  
+3. **ZOHO_TC05** — §9.2 — type multi-URL login flow → PASS  
+4. **CV01** — Load sample → Campus Voice login → feed  
+5. **TC10** — Load sample → intentional FAIL → notify ticket + detailed log download  
+
+**Tip:** Have email/password ready in a private note; type credentials into step lines only when you reach those rows.
 
 ---
 
@@ -335,7 +467,7 @@ Env vars: `GROQ_API_KEY`, `LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-20b`, `
 | Unit tests | 21 passing |
 | Supported step actions | 6 (+ wait/hover in schema; core 6 used in MVP flows) |
 | API endpoints | 13 |
-| Structured sample cases | 3 runnable (TC01, TC10, CV01) |
+| Structured sample cases | 3 loadable in UI (TC01, TC10, CV01) + 2 Zoho login prompts (manual) |
 | Agent pipeline phases logged | validate · planner · generator · scan · enrich · execute · healer · report · notify |
 | Report formats | JSON, Markdown, detailed `.log` |
 | Notification channels | Console (+ Slack optional) |

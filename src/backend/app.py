@@ -25,7 +25,7 @@ from src.common.models import StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
-from src.reporting.detailed_log import save_detailed_log
+from src.reporting.detailed_log import render_detailed_log, save_detailed_log
 from src.reporting.writer import save_json_report, save_markdown_report
 
 FRONTEND_DIR = ROOT / "frontend"
@@ -226,6 +226,10 @@ def get_report_markdown(run_id: str):
 @app.get("/api/v1/reports/{run_id}/log")
 def get_report_log(run_id: str):
     path = Path("data/logs") / f"{run_id}.log"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Detailed log not found")
-    return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/plain")
+    if path.exists():
+        return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/plain")
+    json_path = Path("data/reports") / f"{run_id}.json"
+    if json_path.exists():
+        report = TestReport.model_validate_json(json_path.read_text(encoding="utf-8"))
+        return PlainTextResponse(render_detailed_log(report), media_type="text/plain")
+    raise HTTPException(status_code=404, detail="Detailed log not found")
