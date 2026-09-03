@@ -189,7 +189,8 @@ textarea {
 }
 
 .btn-primary,
-.btn-secondary {
+.btn-secondary,
+a.btn-secondary {
   font: inherit;
   font-weight: 600;
   border: none;
@@ -197,6 +198,9 @@ textarea {
   padding: 0.75rem 1rem;
   cursor: pointer;
   transition: background 0.15s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
 }
 
 .btn-primary {
@@ -387,8 +391,15 @@ h3 {
 
 .download-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-top: 1.25rem;
+}
+
+.download-hint {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--warn);
 }
 
 .footer {

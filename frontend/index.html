@@ -133,8 +133,9 @@
           <div class="download-row">
             <button type="button" class="btn-secondary" id="download-json">Download JSON Report</button>
             <button type="button" class="btn-secondary" id="download-md">Download Markdown</button>
-            <button type="button" class="btn-secondary" id="download-log">Download Detailed Log</button>
+            <a id="download-log" class="btn-secondary" href="#" download>Download Detailed Log</a>
           </div>
+          <p id="download-hint" class="download-hint hidden" role="status"></p>
         </div>
 
         <div id="error-box" class="error-box hidden"></div>
@@ -146,6 +147,6 @@
       <a href="https://github.com/shwetgaur/agentic-webapp-test-executor" target="_blank" rel="noopener">GitHub</a>
     </footer>
 
-    <script src="/static/js/app.js?v=2"></script>
+    <script src="/static/js/app.js?v=3"></script>
   </body>
 </html>

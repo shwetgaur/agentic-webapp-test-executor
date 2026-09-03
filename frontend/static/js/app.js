@@ -73,6 +73,21 @@ function clearError() {
   $("error-box").classList.add("hidden");
 }
 
+function showDownloadHint(msg) {
+  const hint = $("download-hint");
+  if (!hint) return;
+  hint.textContent = msg;
+  hint.classList.remove("hidden");
+  setTimeout(() => hint.classList.add("hidden"), 5000);
+}
+
+function updateDownloadLinks(report) {
+  const logLink = $("download-log");
+  if (!logLink || !report?.run_id) return;
+  logLink.href = `/api/v1/reports/${encodeURIComponent(report.run_id)}/log`;
+  logLink.download = `${report.run_id}.log`;
+}
+
 function formatTs(iso) {
   if (!iso) return "n/a";
   try {
@@ -162,16 +177,22 @@ function downloadBlob(content, filename, mime) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
-  a.style.display = "none";
+  a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 250);
 }
 
 function renderReport(report) {
   lastReport = report;
+  lastLog = renderLogFromReport(report);
+  updateDownloadLinks(report);
   clearError();
+  const hint = $("download-hint");
+  if (hint) hint.classList.add("hidden");
   $("result-empty").classList.add("hidden");
   $("result-content").classList.remove("hidden");
   $("result-hint").textContent = `Last run: ${report.run_id}`;
@@ -297,7 +318,8 @@ async function runTest(e) {
     }
     renderReport(data);
     lastMarkdown = await fetchMarkdown(data.run_id);
-    lastLog = await fetchLog(data.run_id);
+    const serverLog = await fetchLog(data.run_id);
+    if (serverLog) lastLog = serverLog;
   } catch (err) {
     showError(String(err));
   } finally {
@@ -307,7 +329,7 @@ async function runTest(e) {
 
 function downloadJson() {
   if (!lastReport) {
-    showError("Run a test first to download the JSON report.");
+    showDownloadHint("Run a test first to download the JSON report.");
     return;
   }
   downloadBlob(JSON.stringify(lastReport, null, 2), `${lastReport.run_id}.json`, "application/json");
@@ -315,38 +337,28 @@ function downloadJson() {
 
 function downloadMd() {
   if (!lastReport) {
-    showError("Run a test first to download the Markdown report.");
+    showDownloadHint("Run a test first to download the Markdown report.");
     return;
   }
   if (!lastMarkdown) {
-    showError("Markdown report is not available for this run.");
+    showDownloadHint("Markdown report is not available for this run.");
     return;
   }
   downloadBlob(lastMarkdown, `${lastReport.run_id}.md`, "text/markdown");
 }
 
-async function downloadLog() {
+function downloadLogSync() {
   if (!lastReport) {
-    showError("Run a test first to download the detailed log.");
-    return;
+    showDownloadHint("Run a test first to download the detailed log.");
+    return false;
   }
-
-  let logText = lastLog;
+  const logText = lastLog || renderLogFromReport(lastReport);
   if (!logText) {
-    logText = await fetchLog(lastReport.run_id);
+    showDownloadHint("Could not build detailed log for this run.");
+    return false;
   }
-  if (!logText) {
-    logText = renderLogFromReport(lastReport);
-  }
-
-  if (!logText) {
-    showError("Could not build detailed log for this run.");
-    return;
-  }
-
-  lastLog = logText;
-  clearError();
   downloadBlob(logText, `${lastReport.run_id}.log`, "text/plain;charset=utf-8");
+  return true;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -355,5 +367,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("sample-select").addEventListener("change", (e) => loadSample(e.target.value));
   $("download-json").addEventListener("click", downloadJson);
   $("download-md").addEventListener("click", downloadMd);
-  $("download-log").addEventListener("click", downloadLog);
+  $("download-log").addEventListener("click", (e) => {
+    e.preventDefault();
+    downloadLogSync();
+  });
 });
