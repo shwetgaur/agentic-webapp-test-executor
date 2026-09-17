@@ -137,6 +137,16 @@ function renderLogFromReport(report) {
     lines.push("");
   }
 
+  const arts = report.artifacts || {};
+  lines.push(
+    "--- Stored artifacts ---",
+    `Replayed: ${arts.replayed ?? false}`,
+    `Suite JSON: ${arts.script_json_path || "n/a"}`,
+    `Playwright script: ${arts.script_py_path || "n/a"}`,
+    `Locator cache: ${arts.locator_path || "n/a"}`,
+    ""
+  );
+
   lines.push("--- Step Execution (timestamped) ---", "");
   for (const step of report.steps || []) {
     lines.push(
@@ -259,6 +269,18 @@ function renderReport(report) {
     }
   }
 
+  const arts = report.artifacts || {};
+  const abox = $("artifacts-box");
+  if (abox) {
+    const mode = arts.replayed ? "Replayed stored script (agents skipped)" : "Pipeline run (script stored for later replay)";
+    const parts = [mode];
+    if (arts.script_json_path) parts.push(`JSON: ${arts.script_json_path}`);
+    if (arts.script_py_path) parts.push(`Playwright: ${arts.script_py_path}`);
+    if (arts.locator_path) parts.push(`Locators: ${arts.locator_path}`);
+    abox.textContent = parts.join(" · ");
+    abox.className = arts.replayed ? "notify-box notify-ok" : "notify-box notify-ok";
+  }
+
   const notify = report.notify || {};
   const nbox = $("notify-box");
   if (notify.triggered) {
@@ -306,6 +328,8 @@ async function runTest(e) {
     use_llm: $("use_llm").checked,
     use_discovery: $("use_discovery").checked,
     use_healer: $("use_healer").checked,
+    prefer_replay: $("prefer_replay") ? $("prefer_replay").checked : false,
+    refresh_locators: $("refresh_locators") ? $("refresh_locators").checked : false,
   };
 
   const url = useAgents ? "/api/v1/run/agents" : "/api/v1/run/structured";
@@ -378,6 +402,31 @@ function downloadLogSync() {
   return true;
 }
 
+function downloadScript() {
+  if (!lastReport) {
+    showDownloadHint("Run a test first to download the Playwright script.");
+    return;
+  }
+  const arts = lastReport.artifacts || {};
+  const suiteId = lastReport.suite_id;
+  if (!suiteId) {
+    showDownloadHint("No suite id on this report.");
+    return;
+  }
+  fetch(`/api/v1/scripts/${encodeURIComponent(suiteId)}`)
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error("No stored script yet. Run the 3-agent pipeline first."))))
+    .then((data) => {
+      const script = data.playwright_script;
+      if (!script) {
+        showDownloadHint("Stored artifact has no Playwright script.");
+        return;
+      }
+      const name = (arts.script_py_path || `${suiteId}.py`).split(/[/\\]/).pop();
+      downloadBlob(script, name, "text/x-python");
+    })
+    .catch((err) => showDownloadHint(String(err.message || err)));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   checkHealth();
   $("test-form").addEventListener("submit", runTest);
@@ -388,4 +437,6 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     downloadLogSync();
   });
+  const scriptBtn = $("download-script");
+  if (scriptBtn) scriptBtn.addEventListener("click", downloadScript);
 });

@@ -66,6 +66,8 @@ def test_render_detailed_log_includes_step_timestamps():
     assert "duration=1400ms" in text
     assert "2026-08-01T10:00:01.100Z" in text
     assert "step_agent.validate" in text
+    assert "--- Stored artifacts ---" in text
+    assert "Replayed: False" in text
 
 
 def test_save_detailed_log_writes_file(tmp_path):

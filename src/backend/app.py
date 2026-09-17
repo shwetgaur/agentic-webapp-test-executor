@@ -27,6 +27,9 @@ from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
 from src.reporting.detailed_log import render_detailed_log, save_detailed_log
 from src.reporting.writer import save_json_report, save_markdown_report
+from src.reuse.locator_store import LocatorStore
+from src.reuse.replay import load_replay_source, replay_stored_suite
+from src.reuse.script_store import ScriptStore
 
 FRONTEND_DIR = ROOT / "frontend"
 STATIC_DIR = FRONTEND_DIR / "static"
@@ -43,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    for sub in ("data/reports", "data/screenshots", "data/logs"):
+    for sub in ("data/reports", "data/screenshots", "data/logs", "data/locators", "data/scripts"):
         Path(sub).mkdir(parents=True, exist_ok=True)
     yield
 
@@ -84,6 +87,8 @@ class StructuredRunRequest(BaseModel):
     use_llm: bool = True
     use_discovery: bool = True
     use_healer: bool = True
+    prefer_replay: bool = False
+    refresh_locators: bool = False
 
 
 class AgentRunRequest(BaseModel):
@@ -92,6 +97,17 @@ class AgentRunRequest(BaseModel):
     use_llm: bool = True
     use_discovery: bool = True
     use_healer: bool = True
+    prefer_replay: bool = False
+    refresh_locators: bool = False
+
+
+class ReplayRunRequest(BaseModel):
+    suite_id: str | None = None
+    site_url: str | None = None
+    script_path: str | None = None
+    suite: TestSuite | None = None
+    headless: bool = True
+    use_healer: bool = False
 
 
 def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
@@ -115,6 +131,8 @@ def _run_agents(body: AgentRunRequest) -> TestReport:
             use_llm=body.use_llm,
             use_discovery=body.use_discovery,
             use_healer=body.use_healer,
+            prefer_replay=body.prefer_replay,
+            refresh_locators=body.refresh_locators,
         ).run(body.prompt).report
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -189,6 +207,8 @@ def run_from_structured(body: StructuredRunRequest):
                     use_llm=body.use_llm,
                     use_discovery=body.use_discovery,
                     use_healer=body.use_healer,
+                    prefer_replay=body.prefer_replay,
+                    refresh_locators=body.refresh_locators,
                 )
             )
         suite = structured_prompt_to_suite(body.prompt)
@@ -200,6 +220,47 @@ def run_from_structured(body: StructuredRunRequest):
 @app.post("/api/v1/run/agents", response_model=TestReport)
 def run_from_agents(body: AgentRunRequest):
     return _run_agents(body)
+
+
+@app.post("/api/v1/run/replay", response_model=TestReport)
+def run_from_replay(body: ReplayRunRequest):
+    """Execute a stored TestSuite / Playwright artifact without Step + Discovery agents."""
+    try:
+        if body.suite is not None:
+            suite = body.suite
+        elif body.script_path:
+            suite = load_replay_source(body.script_path).suite
+        elif body.suite_id:
+            suite = load_replay_source(body.suite_id, site_url=body.site_url).suite
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide suite, suite_id, or script_path",
+            )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Replay load failed")
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return replay_stored_suite(suite, headless=body.headless, use_healer=body.use_healer)
+
+
+@app.get("/api/v1/scripts/{suite_id}")
+def get_stored_script(suite_id: str, site_url: str | None = None):
+    artifact = ScriptStore().load(suite_id, site_url)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Stored script not found")
+    return artifact
+
+
+@app.get("/api/v1/locators")
+def get_stored_locators(site_url: str, feature: str):
+    stored = LocatorStore().load(site_url, feature)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Stored locators not found")
+    return stored
 
 
 @app.post("/api/v1/run/json", response_model=TestReport)

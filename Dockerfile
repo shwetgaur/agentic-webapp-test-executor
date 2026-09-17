@@ -17,7 +17,7 @@ COPY config ./config
 COPY schemas ./schemas
 COPY tests/samples ./tests/samples
 
-RUN mkdir -p data/reports data/screenshots
+RUN mkdir -p data/reports data/screenshots data/logs data/locators data/scripts
 
 EXPOSE 8000
 

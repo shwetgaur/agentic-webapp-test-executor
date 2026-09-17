@@ -71,6 +71,13 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
     lines.append(f"- Channel: `{n.channel}`")
     lines.append(f"- Ticket: `{n.ticket_id}`")
 
+    arts = report.artifacts
+    lines.extend(["", "## Stored artifacts (locator cache / replay script)", ""])
+    lines.append(f"- Replayed from stored script: `{arts.replayed}`")
+    lines.append(f"- Suite JSON: `{arts.script_json_path or 'n/a'}`")
+    lines.append(f"- Playwright script: `{arts.script_py_path or 'n/a'}`")
+    lines.append(f"- Locator page-object: `{arts.locator_path or 'n/a'}`")
+
     if report.agent_traces:
         lines.extend(["", "## Agent Pipeline", ""])
         lines.append("| Timestamp | Agent | Phase | Detail |")

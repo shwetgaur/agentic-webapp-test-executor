@@ -90,6 +90,8 @@
             <label class="check"><input type="checkbox" id="use_llm" checked /> LLM Step Agent</label>
             <label class="check"><input type="checkbox" id="use_discovery" checked /> Module Discovery</label>
             <label class="check"><input type="checkbox" id="use_healer" checked /> Healer on failure</label>
+            <label class="check"><input type="checkbox" id="prefer_replay" /> Replay stored script if available</label>
+            <label class="check"><input type="checkbox" id="refresh_locators" /> Refresh locators (re-scan)</label>
             <label class="check"><input type="checkbox" id="headless" checked /> Headless browser</label>
           </div>
 
@@ -127,6 +129,9 @@
           <h3>Agent Pipeline</h3>
           <div id="agent-traces" class="trace-list"></div>
 
+          <h3>Stored artifacts</h3>
+          <div id="artifacts-box" class="notify-box notify-ok"></div>
+
           <h3>Notification</h3>
           <div id="notify-box" class="notify-box"></div>
 
@@ -134,6 +139,7 @@
             <button type="button" class="btn-secondary" id="download-json">Download JSON Report</button>
             <button type="button" class="btn-secondary" id="download-md">Download Markdown</button>
             <a id="download-log" class="btn-secondary" href="#" download>Download Detailed Log</a>
+            <button type="button" class="btn-secondary" id="download-script">Download Playwright Script</button>
           </div>
           <p id="download-hint" class="download-hint hidden" role="status"></p>
         </div>
@@ -147,6 +153,6 @@
       <a href="https://github.com/shwetgaur/agentic-webapp-test-executor" target="_blank" rel="noopener">GitHub</a>
     </footer>
 
-    <script src="/static/js/app.js?v=4"></script>
+    <script src="/static/js/app.js?v=5"></script>
   </body>
 </html>

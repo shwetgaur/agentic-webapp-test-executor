@@ -122,12 +122,23 @@ class AgentTrace(BaseModel):
 
 
 class ModuleMap(BaseModel):
-    """Discovered UI elements for a feature on a target site."""
+    """Discovered UI elements for a feature on a target site (page-object cache)."""
 
     site_url: str
     feature: str
     elements: dict[str, str] = Field(default_factory=dict)
     page_urls: list[str] = Field(default_factory=list)
+    updated_at: Optional[datetime] = None
+    source: Optional[str] = None
+
+
+class ArtifactInfo(BaseModel):
+    """Paths to reused locators / stored scripts for this run."""
+
+    replayed: bool = False
+    script_json_path: Optional[str] = None
+    script_py_path: Optional[str] = None
+    locator_path: Optional[str] = None
 
 
 class TestReport(BaseModel):
@@ -147,3 +158,4 @@ class TestReport(BaseModel):
     steps: list[StepResult]
     notify: NotifyInfo = Field(default_factory=NotifyInfo)
     agent_traces: list[AgentTrace] = Field(default_factory=list)
+    artifacts: ArtifactInfo = Field(default_factory=ArtifactInfo)
