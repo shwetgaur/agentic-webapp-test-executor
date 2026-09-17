@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 from src.common.models import AgentTrace, ModuleMap, Step, StepAction, TestSuite
 from src.executor.browser_launch import chromium_launch_kwargs
 from src.executor.navigation import navigate
+from src.reuse.locator_store import LocatorStore, hint_from_step
 
 
 @dataclass
@@ -23,15 +24,27 @@ class DiscoveryAgentResult:
 class DiscoveryAgent:
     """Open target site, discover interactive elements, enrich step selectors."""
 
-    def __init__(self, *, headless: bool = True, timeout_ms: int = 15000) -> None:
+    def __init__(
+        self,
+        *,
+        headless: bool = True,
+        timeout_ms: int = 15000,
+        locator_store: LocatorStore | None = None,
+        reuse_locators: bool = True,
+        refresh_locators: bool = False,
+    ) -> None:
         self.headless = headless
         self.timeout_ms = timeout_ms
+        self.locator_store = locator_store or LocatorStore()
+        self.reuse_locators = reuse_locators
+        self.refresh_locators = refresh_locators
 
     def run(self, suite: TestSuite, feature: str) -> DiscoveryAgentResult:
         scan_urls = _discovery_scan_urls(suite)
         if not scan_urls:
             raise ValueError("Discovery requires at least one URL from goto steps or base_url")
 
+        site_url = scan_urls[0]
         traces: list[AgentTrace] = [
             AgentTrace(
                 agent="discovery_agent",
@@ -40,30 +53,33 @@ class DiscoveryAgent:
             )
         ]
 
-        elements: dict[str, str] = {}
-        page_urls: list[str] = []
-        try:
-            for url in scan_urls:
-                page_map = self._scan_site(url, feature, _suite_has_login_steps(suite))
-                elements.update(page_map.elements)
-                page_urls.extend(page_map.page_urls)
-            module_map = ModuleMap(site_url=scan_urls[0], feature=feature, elements=elements, page_urls=page_urls)
+        cached = None
+        if self.reuse_locators and not self.refresh_locators:
+            cached = self.locator_store.load(site_url, feature)
+
+        if cached and cached.elements:
+            module_map = cached
             traces.append(
                 AgentTrace(
                     agent="discovery_agent",
-                    phase="scan",
-                    detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s)",
+                    phase="cache",
+                    detail=(
+                        f"Reused {len(module_map.elements)} stored locators from "
+                        f"{self.locator_store.path_for(site_url, feature)}"
+                    ),
                 )
             )
-        except (PlaywrightError, OSError, RuntimeError, ValueError) as exc:
-            module_map = ModuleMap(site_url=scan_urls[0], feature=feature, elements={}, page_urls=[])
-            traces.append(
-                AgentTrace(
-                    agent="discovery_agent",
-                    phase="scan_skipped",
-                    detail=f"Discovery skipped: {exc}",
+        else:
+            module_map = self._scan_all(scan_urls, feature, suite, traces)
+            if module_map.elements:
+                path = self.locator_store.merge_save(module_map)
+                traces.append(
+                    AgentTrace(
+                        agent="discovery_agent",
+                        phase="store",
+                        detail=f"Saved {len(module_map.elements)} locators to {path}",
+                    )
                 )
-            )
 
         enriched_steps = [self._enrich_step(step, module_map, traces) for step in suite.steps]
         enriched = suite.model_copy(update={"steps": enriched_steps})
@@ -75,6 +91,45 @@ class DiscoveryAgent:
             )
         )
         return DiscoveryAgentResult(suite=enriched, module_map=module_map, traces=traces)
+
+    def _scan_all(
+        self,
+        scan_urls: list[str],
+        feature: str,
+        suite: TestSuite,
+        traces: list[AgentTrace],
+    ) -> ModuleMap:
+        elements: dict[str, str] = {}
+        page_urls: list[str] = []
+        try:
+            for url in scan_urls:
+                page_map = self._scan_site(url, feature, _suite_has_login_steps(suite))
+                elements.update(page_map.elements)
+                page_urls.extend(page_map.page_urls)
+            module_map = ModuleMap(
+                site_url=scan_urls[0],
+                feature=feature,
+                elements=elements,
+                page_urls=page_urls,
+                source="scan",
+            )
+            traces.append(
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="scan",
+                    detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s)",
+                )
+            )
+            return module_map
+        except (PlaywrightError, OSError, RuntimeError, ValueError) as exc:
+            traces.append(
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="scan_skipped",
+                    detail=f"Discovery skipped: {exc}",
+                )
+            )
+            return ModuleMap(site_url=scan_urls[0], feature=feature, elements={}, page_urls=[])
 
     def _scan_site(self, site_url: str, feature: str, has_login_steps: bool) -> ModuleMap:
         elements: dict[str, str] = {}
@@ -136,7 +191,7 @@ class DiscoveryAgent:
     def _enrich_step(self, step: Step, module_map: ModuleMap, traces: list[AgentTrace]) -> Step:
         if step.action not in (StepAction.FILL, StepAction.CLICK, StepAction.SELECT):
             return step
-        hint = self._hint_from_step(step)
+        hint = hint_from_step(step)
         if not hint:
             return step
         discovered = self._lookup(module_map.elements, hint)
@@ -152,22 +207,7 @@ class DiscoveryAgent:
         return step
 
     def _hint_from_step(self, step: Step) -> str:
-        desc = (step.description or "").lower()
-        if step.action == StepAction.FILL:
-            m = re.search(r"fill\s+(.+?)\s+with", desc)
-            if m:
-                return self._norm(m.group(1))
-        if step.action == StepAction.CLICK:
-            m = re.search(r"click\s+(?:the\s+)?(.+?)(?:\s+button|\s+link)?$", desc)
-            if m:
-                return self._norm(m.group(1))
-        if step.action == StepAction.SELECT:
-            m = re.search(r"from\s+(?:the\s+)?(.+)$", desc)
-            if m:
-                return self._norm(m.group(1))
-        if step.selector and step.selector.startswith("text="):
-            return self._norm(step.selector[5:])
-        return ""
+        return hint_from_step(step)
 
     def _lookup(self, elements: dict[str, str], hint: str) -> str | None:
         if hint in elements:

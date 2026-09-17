@@ -53,7 +53,15 @@ Details: [docs/STRUCTURED_PROMPT.md](docs/STRUCTURED_PROMPT.md)
 python scripts/run_suite.py --structured tests/samples/structured/TC01_login_success.yaml
 
 # 3-agent pipeline (Step → Discovery → Test & Report)
+# Saves locators under data/locators/ and an enriched suite + Playwright script under data/scripts/
 python scripts/run_suite.py --structured tests/samples/structured/TC01_login_success.yaml --agents
+
+# Replay a stored script (skips Step + Discovery agents)
+python scripts/run_suite.py --replay TC01
+python scripts/run_suite.py --replay data/scripts/TC01.json
+
+# Use stored script when present, otherwise run the full pipeline
+python scripts/run_suite.py --structured tests/samples/structured/TC01_login_success.yaml --agents --replay-if-stored
 
 # Legacy plain text / JSON
 python scripts/run_suite.py --text tests/samples/text/TC01_login_success.txt
@@ -68,7 +76,10 @@ uvicorn src.backend.app:app --reload --port 8000
 
 - `GET /health`
 - `POST /api/v1/run/structured` — structured prompt body (`use_agents: true` for pipeline)
-- `POST /api/v1/run/agents` — 3-agent pipeline
+- `POST /api/v1/run/agents` — 3-agent pipeline (`prefer_replay: true` to skip agents when a script exists)
+- `POST /api/v1/run/replay` — execute stored TestSuite / Playwright script only
+- `GET /api/v1/scripts/{suite_id}` — last stored suite + generated Playwright script
+- `GET /api/v1/locators?site_url=&feature=` — cached page-object locators
 - `POST /api/v1/run/text` — legacy plain text
 - `GET /api/v1/reports/{run_id}`
 
@@ -78,6 +89,7 @@ uvicorn src.backend.app:app --reload --port 8000
 frontend/          Web UI (HTML/CSS/JS)
 demo/              Streamlit (local dev fallback)
 src/agents/        3-agent pipeline (step, discovery, test/report)
+src/reuse/         Locator cache + stored-script replay
 src/agent/         Rule parser + structured prompt
 src/executor/      Playwright runner
 src/reporting/     Pass/fail reports

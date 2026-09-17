@@ -45,6 +45,18 @@ def render_detailed_log(report: TestReport) -> str:
             )
         lines.append("")
 
+    arts = report.artifacts
+    lines.extend(
+        [
+            "--- Stored artifacts ---",
+            f"Replayed: {arts.replayed}",
+            f"Suite JSON: {arts.script_json_path or 'n/a'}",
+            f"Playwright script: {arts.script_py_path or 'n/a'}",
+            f"Locator cache: {arts.locator_path or 'n/a'}",
+            "",
+        ]
+    )
+
     lines.extend(["--- Step Execution (timestamped) ---", ""])
     for step in report.steps:
         lines.append(
