@@ -55,17 +55,15 @@ def _wait_for_auth_navigation(page, prior_url: str, timeout_ms: int) -> None:
 
 
 def _wait_for_url_match(page, expected: str, timeout_ms: int) -> str:
-    """Poll until page URL matches expected fragment or timeout."""
-    deadline = time.perf_counter() + (timeout_ms / 1000)
-    last_url = page.url
-    while time.perf_counter() < deadline:
+    """Wait until page URL matches expected fragment or timeout."""
+    try:
+        page.wait_for_url(lambda url: url_matches(url, expected), timeout=timeout_ms)
+        return page.url
+    except PlaywrightTimeoutError:
         last_url = page.url
         if url_matches(last_url, expected):
             return last_url
-        page.wait_for_timeout(300)
-    if not url_matches(last_url, expected):
-        raise AssertionError(f"URL '{last_url}' does not contain '{expected}'")
-    return last_url
+        raise AssertionError(f"URL '{last_url}' does not contain '{expected}'") from None
 
 
 class PlaywrightExecutor:

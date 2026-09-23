@@ -1,4 +1,4 @@
-"""Chromium launch helpers for local dev and container hosts (Render, Docker)."""
+"""Chromium launch helpers for local dev and container hosts (Cloud Run, Docker)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from pathlib import Path
 
 
 def is_container_runtime() -> bool:
-    """True when running inside Docker or on Render."""
+    """True when running inside Docker, Cloud Run, or similar restricted hosts."""
+    if os.getenv("K_SERVICE"):  # Google Cloud Run
+        return True
     if os.getenv("RENDER") == "true":
         return True
     if Path("/.dockerenv").exists():

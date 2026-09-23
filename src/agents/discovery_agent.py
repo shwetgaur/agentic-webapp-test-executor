@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
 from playwright.sync_api import Error as PlaywrightError
@@ -42,17 +43,26 @@ class DiscoveryAgent:
 
         elements: dict[str, str] = {}
         page_urls: list[str] = []
+        scan_started = time.perf_counter()
+        has_login = _suite_has_login_steps(suite)
         try:
-            for url in scan_urls:
-                page_map = self._scan_site(url, feature, _suite_has_login_steps(suite))
-                elements.update(page_map.elements)
-                page_urls.extend(page_map.page_urls)
+            with sync_playwright() as p:
+                browser = p.chromium.launch(**chromium_launch_kwargs(headless=self.headless))
+                try:
+                    for url in scan_urls:
+                        page_map = self._scan_site(browser, url, feature, has_login)
+                        elements.update(page_map.elements)
+                        page_urls.extend(page_map.page_urls)
+                finally:
+                    browser.close()
             module_map = ModuleMap(site_url=scan_urls[0], feature=feature, elements=elements, page_urls=page_urls)
+            scan_ms = int((time.perf_counter() - scan_started) * 1000)
             traces.append(
                 AgentTrace(
                     agent="discovery_agent",
                     phase="scan",
                     detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s)",
+                    duration_ms=scan_ms,
                 )
             )
         except (PlaywrightError, OSError, RuntimeError, ValueError) as exc:
@@ -76,18 +86,18 @@ class DiscoveryAgent:
         )
         return DiscoveryAgentResult(suite=enriched, module_map=module_map, traces=traces)
 
-    def _scan_site(self, site_url: str, feature: str, has_login_steps: bool) -> ModuleMap:
+    def _scan_site(self, browser, site_url: str, feature: str, has_login_steps: bool) -> ModuleMap:
+        """Scan one URL using an already-launched browser (avoids repeated cold starts)."""
         elements: dict[str, str] = {}
         page_urls: list[str] = []
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(**chromium_launch_kwargs(headless=self.headless))
-            page = browser.new_page()
+        page = browser.new_page()
+        try:
             page.set_default_timeout(self.timeout_ms)
             navigate(page, site_url)
             page_urls.append(page.url)
             try:
-                page.wait_for_selector("input, button, a", timeout=self.timeout_ms)
+                page.wait_for_selector("input, button, a", timeout=min(self.timeout_ms, 8000))
             except PlaywrightError:
                 pass
 
@@ -128,8 +138,8 @@ class DiscoveryAgent:
                 for key, guess in login_guesses.items():
                     if key not in elements and page.locator(guess).count():
                         elements[key] = guess
-
-            browser.close()
+        finally:
+            page.close()
 
         return ModuleMap(site_url=site_url, feature=feature, elements=elements, page_urls=page_urls)
 

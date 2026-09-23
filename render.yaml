@@ -24,5 +24,11 @@ services:
         value: console
       - key: GROQ_API_KEY
         sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGSMITH_PROJECT
+        value: agentic-test-executor
+      - key: LANGSMITH_TRACING_ENABLED
+        value: "true"
       - key: SLACK_WEBHOOK_URL
         sync: false

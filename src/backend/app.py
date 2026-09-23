@@ -144,7 +144,7 @@ def health():
 @app.get("/ping")
 @app.head("/ping")
 def ping():
-    """Minimal liveness probe for UptimeRobot / Render (plain body contains 'ok')."""
+    """Minimal liveness probe for UptimeRobot / Cloud Run (plain body contains 'ok')."""
     return PlainTextResponse("ok", media_type="text/plain")
 
 

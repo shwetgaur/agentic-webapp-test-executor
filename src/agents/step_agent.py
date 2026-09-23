@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 from src.agent.flexible_steps import normalize_llm_suite, suite_from_natural_steps
 from src.agent.structured_prompt import structured_prompt_to_suite
 from src.agents.llm_client import LLMClient
+from src.agents.llm_observability import LLMCallRecord
 from src.common.models import AgentTrace, StructuredTestPrompt, TestSuite
 
 _PLANNER_SYSTEM = """You are a QA test planner. The user writes natural-language test steps — keep their wording style.
@@ -42,6 +44,25 @@ class StepAgentResult:
     traces: list[AgentTrace]
 
 
+def _llm_trace(
+    agent: str,
+    phase: str,
+    detail: str,
+    call: LLMCallRecord | None,
+    *,
+    duration_ms: int | None = None,
+) -> AgentTrace:
+    return AgentTrace(
+        agent=agent,
+        phase=phase,
+        detail=detail,
+        duration_ms=duration_ms,
+        latency_ms=call.latency_ms if call else None,
+        tokens_prompt=call.prompt_tokens if call else None,
+        tokens_completion=call.completion_tokens if call else None,
+    )
+
+
 class StepAgent:
     """Validate prompt, plan/refine steps (Planner), parse to TestSuite (Generator)."""
 
@@ -59,22 +80,30 @@ class StepAgent:
 
         steps = list(prompt.steps)
         if use_llm and self.llm.is_available():
+            t0 = time.perf_counter()
             planned = self._plan_steps(prompt)
+            planner_ms = int((time.perf_counter() - t0) * 1000)
+            call = self.llm.last_call
             if planned:
                 steps = planned
+                token_note = f" | tokens={call.total_tokens}" if call and call.total_tokens else ""
                 traces.append(
-                    AgentTrace(
-                        agent="step_agent",
-                        phase="planner",
-                        detail=f"LLM refined {len(steps)} steps for objective: {prompt.objective[:80]}",
+                    _llm_trace(
+                        "step_agent",
+                        "planner",
+                        f"LLM refined {len(steps)} steps for objective: {prompt.objective[:80]}{token_note}",
+                        call,
+                        duration_ms=planner_ms,
                     )
                 )
             else:
                 traces.append(
-                    AgentTrace(
-                        agent="step_agent",
-                        phase="planner",
-                        detail="LLM planner skipped; using original steps",
+                    _llm_trace(
+                        "step_agent",
+                        "planner",
+                        "LLM planner skipped; using original steps",
+                        call,
+                        duration_ms=planner_ms,
                     )
                 )
         else:
@@ -89,14 +118,20 @@ class StepAgent:
         working_prompt = prompt.model_copy(update={"steps": steps})
 
         if use_llm and self.llm.is_available():
+            t0 = time.perf_counter()
             suite = self._generate_suite_llm(working_prompt)
+            generator_ms = int((time.perf_counter() - t0) * 1000)
+            call = self.llm.last_call
             if suite:
                 suite = normalize_llm_suite(suite, working_prompt, source_lines=steps)
+                token_note = f" | tokens={call.total_tokens}" if call and call.total_tokens else ""
                 traces.append(
-                    AgentTrace(
-                        agent="step_agent",
-                        phase="generator",
-                        detail=f"LLM generated TestSuite with {len(suite.steps)} steps (normalized)",
+                    _llm_trace(
+                        "step_agent",
+                        "generator",
+                        f"LLM generated TestSuite with {len(suite.steps)} steps (normalized){token_note}",
+                        call,
+                        duration_ms=generator_ms,
                     )
                 )
                 return StepAgentResult(suite=suite, refined_steps=steps, traces=traces)
@@ -118,7 +153,7 @@ class StepAgent:
             f"Steps:\n" + "\n".join(f"- {s}" for s in prompt.steps)
         )
         try:
-            data = self.llm.chat_json(_PLANNER_SYSTEM, user)
+            data = self.llm.chat_json(_PLANNER_SYSTEM, user, caller="planner")
         except Exception:
             return None
         if isinstance(data, list) and all(isinstance(x, str) for x in data) and data:
@@ -132,7 +167,7 @@ class StepAgent:
             f"steps:\n" + "\n".join(prompt.steps)
         )
         try:
-            data = self.llm.chat_json(_GENERATOR_SYSTEM, user)
+            data = self.llm.chat_json(_GENERATOR_SYSTEM, user, caller="generator")
         except Exception:
             return None
         if not isinstance(data, dict):
@@ -151,7 +186,6 @@ class StepAgent:
                 }
             )
         except Exception:
-            # LLM JSON invalid — fall back to flexible natural-language parser.
             try:
                 return suite_from_natural_steps(prompt, prompt.steps)
             except ValueError:

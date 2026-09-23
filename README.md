@@ -3,7 +3,9 @@
 
 Structured test prompt → Playwright execution → pass/fail report → team notification on failure.
 
-**Web UI:** FastAPI serves the dashboard at `/` (recommended for demo & Render deploy).
+**Live demo:** https://agentic-webapp-test-executor-275092957818.us-central1.run.app
+
+**Web UI:** FastAPI serves the dashboard at `/` (local or Cloud Run).
 
 ## Quick start (web UI)
 
@@ -17,12 +19,13 @@ uvicorn src.backend.app:app --reload --port 8000
 
 Open **http://localhost:8000**
 
-## Deploy on Render
+## Deploy on Google Cloud Run
 
-Docker-based deploy with Playwright. See [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
+Docker-based deploy with Playwright. See [docs/DEPLOY_CLOUD_RUN.md](docs/DEPLOY_CLOUD_RUN.md).
 
-```bash
-# Push to GitHub, then Render Dashboard → Blueprint → connect repo (render.yaml)
+```powershell
+# From repo root (requires gcloud CLI + GCP project)
+.\scripts\deploy_cloud_run.ps1 -ProjectId YOUR_GCP_PROJECT_ID
 ```
 
 ## Legacy Streamlit demo (local only)
@@ -39,9 +42,21 @@ Testers must fill fixed fields — **no free-form-only input**:
 
 Details: [docs/STRUCTURED_PROMPT.md](docs/STRUCTURED_PROMPT.md)
 
+## Observability & performance
+
+Each agent run records **LLM token usage** (planner, generator, healer) and a **phase timing breakdown** in:
+
+- `data/logs/{run_id}.log` — detailed log with performance section and slowest phase
+- `data/reports/{run_id}.json` — `llm_calls` and `phase_timings` arrays
+- `data/reports/{run_id}.md` — LLM usage and phase timing tables
+
+Optional LangSmith export: set `LANGSMITH_API_KEY` and `LANGSMITH_TRACING_ENABLED=true` in `.env`.
+
+Typical bottlenecks (from execution logs): **execute** (Playwright browser), **discovery_agent** (DOM scan), then **step_agent** LLM calls.
+
 ## Documentation
 
-- [Deploy on Render](docs/DEPLOY_RENDER.md) — Docker + Playwright production deploy
+- [Deploy on Cloud Run](docs/DEPLOY_CLOUD_RUN.md) — GCP production deploy (Playwright Docker)
 - [MVP Specification (Phase-1)](docs/MVP_SPECIFICATION.md) — Phase-1 baseline document
 - [Phase-2 Specification](docs/PHASE2_SPECIFICATION.md) — 3-agent pipeline, web UI, cloud deploy
 - [Demo Prep & Q&A](docs/DEMO_PREP.md) — demo script, mentor questions, PPT alignment

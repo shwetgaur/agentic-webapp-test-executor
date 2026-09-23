@@ -73,11 +73,35 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
 
     if report.agent_traces:
         lines.extend(["", "## Agent Pipeline", ""])
-        lines.append("| Timestamp | Agent | Phase | Detail |")
-        lines.append("|-----------|-------|-------|--------|")
+        lines.append("| Timestamp | Agent | Phase | Duration (ms) | Tokens | Detail |")
+        lines.append("|-----------|-------|-------|--------------:|--------|--------|")
         for t in report.agent_traces:
             detail = (t.detail or "").replace("|", "\\|")
-            lines.append(f"| {_fmt_ts(t.timestamp)} | {t.agent} | {t.phase} | {detail} |")
+            tokens = ""
+            if t.tokens_prompt is not None or t.tokens_completion is not None:
+                tokens = f"{t.tokens_prompt or 0}/{t.tokens_completion or 0}"
+            dur = t.duration_ms if t.duration_ms is not None else ""
+            lines.append(
+                f"| {_fmt_ts(t.timestamp)} | {t.agent} | {t.phase} | {dur} | {tokens} | {detail} |"
+            )
+
+    if report.llm_calls:
+        lines.extend(["", "## LLM Usage", ""])
+        lines.append("| Caller | Provider | Model | Prompt | Completion | Total | Latency (ms) |")
+        lines.append("|--------|----------|-------|-------:|-----------:|------:|-------------:|")
+        for c in report.llm_calls:
+            lines.append(
+                f"| {c.caller} | {c.provider} | {c.model} | {c.prompt_tokens} | "
+                f"{c.completion_tokens} | {c.total_tokens} | {c.latency_ms} |"
+            )
+
+    if report.phase_timings:
+        lines.extend(["", "## Phase Timings", ""])
+        lines.append("| Phase | Duration (ms) | Detail |")
+        lines.append("|-------|--------------:|--------|")
+        for pt in sorted(report.phase_timings, key=lambda p: p.duration_ms, reverse=True):
+            detail = (pt.detail or "").replace("|", "\\|")
+            lines.append(f"| {pt.phase} | {pt.duration_ms} | {detail} |")
 
     lines.append("")
 

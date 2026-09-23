@@ -119,6 +119,31 @@ class AgentTrace(BaseModel):
     phase: str
     detail: str
     timestamp: datetime = Field(default_factory=_utc_now)
+    duration_ms: Optional[int] = None
+    latency_ms: Optional[int] = None
+    tokens_prompt: Optional[int] = None
+    tokens_completion: Optional[int] = None
+
+
+class LLMCallMetrics(BaseModel):
+    """Token and latency metrics for one LLM invocation."""
+
+    caller: str
+    provider: str
+    model: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    latency_ms: int = 0
+    success: bool = True
+
+
+class PhaseTiming(BaseModel):
+    """Wall-clock duration for one pipeline phase."""
+
+    phase: str
+    duration_ms: int
+    detail: Optional[str] = None
 
 
 class ModuleMap(BaseModel):
@@ -147,3 +172,5 @@ class TestReport(BaseModel):
     steps: list[StepResult]
     notify: NotifyInfo = Field(default_factory=NotifyInfo)
     agent_traces: list[AgentTrace] = Field(default_factory=list)
+    llm_calls: list[LLMCallMetrics] = Field(default_factory=list)
+    phase_timings: list[PhaseTiming] = Field(default_factory=list)

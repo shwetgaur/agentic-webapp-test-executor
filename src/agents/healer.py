@@ -40,12 +40,18 @@ class HealerAgent:
 
         if self.llm.is_available():
             healed = self._heal_llm(step, page, error)
+            call = self.llm.last_call
             if healed:
+                token_note = f" | tokens={call.total_tokens}" if call and call.total_tokens else ""
                 self.traces.append(
                     AgentTrace(
                         agent="test_report_agent",
                         phase="healer",
-                        detail=f"{step.id}: LLM heal -> {healed.selector}",
+                        detail=f"{step.id}: LLM heal -> {healed.selector}{token_note}",
+                        duration_ms=call.latency_ms if call else None,
+                        latency_ms=call.latency_ms if call else None,
+                        tokens_prompt=call.prompt_tokens if call else None,
+                        tokens_completion=call.completion_tokens if call else None,
                     )
                 )
                 return healed
@@ -127,7 +133,7 @@ class HealerAgent:
             },
             indent=2,
         )
-        data = self.llm.chat_json(_HEALER_SYSTEM, user)
+        data = self.llm.chat_json(_HEALER_SYSTEM, user, caller="healer")
         if not isinstance(data, dict) or not data.get("selector"):
             return None
         try:

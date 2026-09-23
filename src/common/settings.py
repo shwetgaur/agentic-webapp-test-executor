@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     llm_model: str = "openai/gpt-oss-20b"
 
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "agentic-test-executor"
+    langsmith_tracing_enabled: bool = False
+
     notify_enabled: bool = True
     notify_channel: str = "console"
     slack_webhook_url: str | None = None

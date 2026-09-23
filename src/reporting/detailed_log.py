@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.common.models import TestReport
+from src.reporting.performance_summary import render_performance_summary
 
 
 def _fmt_ts(dt: datetime | None) -> str:
@@ -40,10 +41,22 @@ def render_detailed_log(report: TestReport) -> str:
     if report.agent_traces:
         lines.extend(["--- Agent Pipeline ---", ""])
         for trace in report.agent_traces:
+            metrics: list[str] = []
+            if trace.duration_ms is not None:
+                metrics.append(f"duration={trace.duration_ms}ms")
+            if trace.latency_ms is not None and trace.latency_ms != trace.duration_ms:
+                metrics.append(f"llm_latency={trace.latency_ms}ms")
+            if trace.tokens_prompt is not None:
+                metrics.append(f"prompt_tokens={trace.tokens_prompt}")
+            if trace.tokens_completion is not None:
+                metrics.append(f"completion_tokens={trace.tokens_completion}")
+            suffix = f" ({', '.join(metrics)})" if metrics else ""
             lines.append(
-                f"[{_fmt_ts(trace.timestamp)}] {trace.agent}.{trace.phase} — {trace.detail}"
+                f"[{_fmt_ts(trace.timestamp)}] {trace.agent}.{trace.phase}{suffix} — {trace.detail}"
             )
         lines.append("")
+
+    lines.extend(render_performance_summary(report))
 
     lines.extend(["--- Step Execution (timestamped) ---", ""])
     for step in report.steps:
