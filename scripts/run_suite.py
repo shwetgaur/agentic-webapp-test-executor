@@ -41,6 +41,7 @@ def main() -> None:
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM in step agent")
     parser.add_argument("--no-discovery", action="store_true", help="Disable module discovery agent")
     parser.add_argument("--no-healer", action="store_true", help="Disable healer in test agent")
+    parser.add_argument("--replay", action="store_true", help="Replay cached suite (skip LLM + discovery)")
     parser.add_argument("--headed", action="store_true", help="Run browser headed (not headless)")
     args = parser.parse_args()
 
@@ -56,6 +57,7 @@ def main() -> None:
             use_llm=not args.no_llm,
             use_discovery=not args.no_discovery,
             use_healer=not args.no_healer,
+            use_replay=args.replay,
         ).run(prompt)
         report = result.report
     elif args.json:

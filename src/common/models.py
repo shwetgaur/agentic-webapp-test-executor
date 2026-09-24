@@ -25,6 +25,8 @@ class StepAction(str, Enum):
     ASSERT_URL = "assert_url"
     ASSERT_VISIBLE = "assert_visible"
     SCREENSHOT = "screenshot"
+    CLEAR_COOKIES = "clear_cookies"
+    CLEAR_STORAGE = "clear_storage"
 
 
 class StepStatus(str, Enum):
@@ -174,3 +176,5 @@ class TestReport(BaseModel):
     agent_traces: list[AgentTrace] = Field(default_factory=list)
     llm_calls: list[LLMCallMetrics] = Field(default_factory=list)
     phase_timings: list[PhaseTiming] = Field(default_factory=list)
+    suite_snapshot_path: Optional[str] = None
+    replay_mode: bool = False

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     default_timeout_ms: int = 30000
     navigation_timeout_ms: int = 45000
     goto_wait_until: str = "domcontentloaded"
+    clear_browser_state_on_run: bool = True
 
 
 settings = Settings()

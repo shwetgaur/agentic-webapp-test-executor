@@ -21,14 +21,20 @@ class HealerAgent:
     def __init__(self, llm: LLMClient | None = None) -> None:
         self.llm = llm or LLMClient()
         self.traces: list[AgentTrace] = []
+        self.healed_selectors: dict[str, str] = {}
+
+    def reset(self) -> None:
+        self.traces = []
+        self.healed_selectors = {}
 
     def heal(self, step: Step, page, error: str) -> Optional[Step]:
-        self.traces = []
         if step.action not in (StepAction.FILL, StepAction.CLICK, StepAction.SELECT, StepAction.ASSERT_VISIBLE):
             return None
 
         healed = self._heal_rules(step, page)
         if healed:
+            if healed.selector:
+                self.healed_selectors[step.id] = healed.selector
             self.traces.append(
                 AgentTrace(
                     agent="test_report_agent",
@@ -42,6 +48,8 @@ class HealerAgent:
             healed = self._heal_llm(step, page, error)
             call = self.llm.last_call
             if healed:
+                if healed.selector:
+                    self.healed_selectors[step.id] = healed.selector
                 token_note = f" | tokens={call.total_tokens}" if call and call.total_tokens else ""
                 self.traces.append(
                     AgentTrace(

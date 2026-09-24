@@ -253,10 +253,86 @@ function renderReport(report) {
     for (const t of agentTraces) {
       const div = document.createElement("div");
       div.className = "trace-item";
-      div.innerHTML = `<strong>${t.agent}</strong> · <code>${t.phase}</code> — ${t.detail}` +
+      const metrics = [];
+      if (t.duration_ms != null) metrics.push(`${t.duration_ms} ms`);
+      if (t.tokens_prompt != null) metrics.push(`tokens ${t.tokens_prompt}/${t.tokens_completion || 0}`);
+      const metricStr = metrics.length ? ` · ${metrics.join(" · ")}` : "";
+      div.innerHTML = `<strong>${t.agent}</strong> · <code>${t.phase}</code>${metricStr} — ${t.detail}` +
         (t.timestamp ? `<div class="step-meta">${formatTs(t.timestamp)}</div>` : "");
       traces.appendChild(div);
     }
+  }
+
+  const perf = $("perf-panel");
+  perf.innerHTML = "";
+  const phaseTimings = report.phase_timings || [];
+  const llmCalls = report.llm_calls || [];
+  if (phaseTimings.length || llmCalls.length || report.replay_mode) {
+    if (report.replay_mode) {
+      const tag = document.createElement("div");
+      tag.className = "perf-tag";
+      tag.textContent = "Replay mode — skipped LLM + discovery";
+      perf.appendChild(tag);
+    }
+    if (report.suite_snapshot_path) {
+      const snap = document.createElement("div");
+      snap.className = "perf-meta";
+      snap.textContent = `Cached suite: ${report.suite_snapshot_path}`;
+      perf.appendChild(snap);
+    }
+    if (phaseTimings.length) {
+      const table = document.createElement("table");
+      table.className = "perf-table";
+      table.innerHTML = "<thead><tr><th>Phase</th><th>Duration (ms)</th></tr></thead>";
+      const tbody = document.createElement("tbody");
+      for (const pt of [...phaseTimings].sort((a, b) => b.duration_ms - a.duration_ms)) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${pt.phase}</td><td>${pt.duration_ms}</td>`;
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      perf.appendChild(table);
+    }
+    if (llmCalls.length) {
+      const llmHead = document.createElement("div");
+      llmHead.className = "perf-subhead";
+      llmHead.textContent = "LLM token usage";
+      perf.appendChild(llmHead);
+      const ltable = document.createElement("table");
+      ltable.className = "perf-table";
+      ltable.innerHTML =
+        "<thead><tr><th>Caller</th><th>Prompt</th><th>Completion</th><th>Total</th><th>Latency (ms)</th></tr></thead>";
+      const lbody = document.createElement("tbody");
+      for (const c of llmCalls) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${c.caller}</td><td>${c.prompt_tokens}</td><td>${c.completion_tokens}</td><td>${c.total_tokens}</td><td>${c.latency_ms}</td>`;
+        lbody.appendChild(tr);
+      }
+      ltable.appendChild(lbody);
+      perf.appendChild(ltable);
+    }
+  } else {
+    perf.innerHTML = '<div class="perf-meta">No performance metrics for this run.</div>';
+  }
+
+  const suiteLink = $("download-suite");
+  if (suiteLink && report.suite_snapshot_path) {
+    suiteLink.classList.remove("hidden");
+    suiteLink.onclick = async (ev) => {
+      ev.preventDefault();
+      const testId = report.suite_id;
+      if (!testId) return;
+      try {
+        const res = await fetch(`/api/v1/suites/${encodeURIComponent(testId)}/latest`);
+        if (!res.ok) return;
+        const suite = await res.json();
+        downloadBlob(JSON.stringify(suite, null, 2), `${testId}_suite.json`, "application/json");
+      } catch {
+        /* ignore */
+      }
+    };
+  } else if (suiteLink) {
+    suiteLink.classList.add("hidden");
   }
 
   const notify = report.notify || {};
@@ -300,12 +376,14 @@ async function runTest(e) {
   const prompt = buildPrompt();
   const useAgents = $("use_agents").checked;
 
+  const useReplay = $("use_replay").checked;
   const body = {
     prompt,
     headless: $("headless").checked,
-    use_llm: $("use_llm").checked,
-    use_discovery: $("use_discovery").checked,
+    use_llm: useReplay ? false : $("use_llm").checked,
+    use_discovery: useReplay ? false : $("use_discovery").checked,
     use_healer: $("use_healer").checked,
+    use_replay: useReplay,
   };
 
   const url = useAgents ? "/api/v1/run/agents" : "/api/v1/run/structured";

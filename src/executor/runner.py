@@ -54,6 +54,19 @@ def _wait_for_auth_navigation(page, prior_url: str, timeout_ms: int) -> None:
         pass
 
 
+def _clear_browser_state(context, page) -> None:
+    """Fresh session isolation — cookies and web storage cleared before steps run."""
+    try:
+        context.clear_cookies()
+    except PlaywrightError:
+        pass
+    try:
+        page.goto("about:blank", wait_until="commit", timeout=5000)
+        page.evaluate("() => { try { localStorage.clear(); sessionStorage.clear(); } catch (e) {} }")
+    except (PlaywrightError, PlaywrightTimeoutError):
+        pass
+
+
 def _wait_for_url_match(page, expected: str, timeout_ms: int) -> str:
     """Wait until page URL matches expected fragment or timeout."""
     try:
@@ -96,6 +109,8 @@ class PlaywrightExecutor:
                 context = browser.new_context()
                 page = context.new_page()
                 page.set_default_timeout(self.timeout_ms)
+                if settings.clear_browser_state_on_run:
+                    _clear_browser_state(context, page)
 
                 for step in suite.steps:
                     if failed:
@@ -315,4 +330,10 @@ class PlaywrightExecutor:
         if action == StepAction.SCREENSHOT:
             # handled as success marker; caller may also screenshot on failure
             return "screenshot-ok"
+        if action == StepAction.CLEAR_COOKIES:
+            page.context.clear_cookies()
+            return "cookies cleared"
+        if action == StepAction.CLEAR_STORAGE:
+            page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
+            return "storage cleared"
         raise ValueError(f"Unsupported action: {action}")

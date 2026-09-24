@@ -414,6 +414,52 @@ h3 {
   color: var(--warn);
 }
 
+.perf-panel {
+  margin-bottom: 1rem;
+}
+
+.perf-tag {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.perf-meta {
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.perf-subhead {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.perf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.perf-table th,
+.perf-table td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.perf-table th {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
 .footer {
   display: flex;
   justify-content: space-between;

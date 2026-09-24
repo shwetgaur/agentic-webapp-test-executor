@@ -43,6 +43,12 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
         f"- **Started:** {report.started_at.isoformat()}",
         f"- **Finished:** {report.finished_at.isoformat()}",
         f"- **Duration:** {report.duration_ms} ms",
+    ]
+    if report.replay_mode:
+        lines.append("- **Replay mode:** yes (cached suite)")
+    if report.suite_snapshot_path:
+        lines.append(f"- **Cached suite:** `{report.suite_snapshot_path}`")
+    lines.extend([
         "",
         "## Summary",
         "",
@@ -54,7 +60,7 @@ def save_markdown_report(report: TestReport, out_dir: str | Path = "data/reports
         "",
         "| Step | Action | Status | Started | Finished | Duration (ms) | Expected | Actual / Error | Screenshot |",
         "|------|--------|--------|---------|----------|--------------:|----------|----------------|------------|",
-    ]
+    ])
     for s in report.steps:
         err = s.error or s.actual or ""
         err = err.replace("|", "\\|")

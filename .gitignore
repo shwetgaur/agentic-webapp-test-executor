@@ -31,6 +31,8 @@ Thumbs.db
 data/runs/
 data/screenshots/
 data/reports/
+data/locators/
+data/suites/
 *.db
 *.sqlite3
 artifacts/

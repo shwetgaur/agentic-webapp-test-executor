@@ -107,6 +107,16 @@ def parse_plain_text_case(
                 )
             )
             continue
+        if re.match(r"^clear\s+(?:browser\s+)?cookies?$", raw, re.I):
+            steps.append(
+                Step(id=step_id, action=StepAction.CLEAR_COOKIES, description=raw)
+            )
+            continue
+        if re.match(r"^clear\s+(?:browser\s+)?storage$", raw, re.I):
+            steps.append(
+                Step(id=step_id, action=StepAction.CLEAR_STORAGE, description=raw)
+            )
+            continue
         if (m := _ASSERT_TEXT_RE.match(raw)):
             expected = _clean(m.group(1))
             steps.append(

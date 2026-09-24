@@ -54,6 +54,12 @@ Optional LangSmith export: set `LANGSMITH_API_KEY` and `LANGSMITH_TRACING_ENABLE
 
 Typical bottlenecks (from execution logs): **execute** (Playwright browser), **discovery_agent** (DOM scan), then **step_agent** LLM calls.
 
+**Locator cache & replay (Sep 3 mentor items):**
+- Discovery results saved under `data/locators/` and reused on the same site + feature
+- Enriched TestSuite saved under `data/suites/{test_id}_latest.json` after each agent run
+- **Replay cached suite** in the UI (or `--replay` CLI) skips LLM + discovery for faster runs
+- API: `GET /api/v1/suites/{test_id}/latest`, `POST /api/v1/replay/{test_id}`
+
 ## Documentation
 
 - [Deploy on Cloud Run](docs/DEPLOY_CLOUD_RUN.md) — GCP production deploy (Playwright Docker)

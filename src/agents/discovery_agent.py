@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
+from src.agents.artifact_store import LocatorStore
 from src.common.models import AgentTrace, ModuleMap, Step, StepAction, TestSuite
 from src.executor.browser_launch import chromium_launch_kwargs
 from src.executor.navigation import navigate
@@ -24,16 +25,48 @@ class DiscoveryAgentResult:
 class DiscoveryAgent:
     """Open target site, discover interactive elements, enrich step selectors."""
 
-    def __init__(self, *, headless: bool = True, timeout_ms: int = 15000) -> None:
+    def __init__(
+        self,
+        *,
+        headless: bool = True,
+        timeout_ms: int = 15000,
+        locator_store: LocatorStore | None = None,
+    ) -> None:
         self.headless = headless
         self.timeout_ms = timeout_ms
+        self.locator_store = locator_store or LocatorStore()
 
     def run(self, suite: TestSuite, feature: str) -> DiscoveryAgentResult:
         scan_urls = _discovery_scan_urls(suite)
         if not scan_urls:
             raise ValueError("Discovery requires at least one URL from goto steps or base_url")
 
-        traces: list[AgentTrace] = [
+        site_url = scan_urls[0]
+        cached = self.locator_store.load(site_url, feature)
+        if cached and cached.elements:
+            traces: list[AgentTrace] = [
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="cache_hit",
+                    detail=(
+                        f"Reused {len(cached.elements)} cached locators for "
+                        f"'{feature}' on {site_url} (skipped DOM scan)"
+                    ),
+                    duration_ms=0,
+                )
+            ]
+            enriched_steps = [self._enrich_step(step, cached, traces) for step in suite.steps]
+            enriched = suite.model_copy(update={"steps": enriched_steps})
+            traces.append(
+                AgentTrace(
+                    agent="discovery_agent",
+                    phase="enrich",
+                    detail="Mapped cached selectors onto TestSuite steps",
+                )
+            )
+            return DiscoveryAgentResult(suite=enriched, module_map=cached, traces=traces)
+
+        traces = [
             AgentTrace(
                 agent="discovery_agent",
                 phase="start",
@@ -57,11 +90,13 @@ class DiscoveryAgent:
                     browser.close()
             module_map = ModuleMap(site_url=scan_urls[0], feature=feature, elements=elements, page_urls=page_urls)
             scan_ms = int((time.perf_counter() - scan_started) * 1000)
+            if module_map.elements:
+                self.locator_store.save(module_map)
             traces.append(
                 AgentTrace(
                     agent="discovery_agent",
                     phase="scan",
-                    detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s)",
+                    detail=f"Discovered {len(module_map.elements)} elements on {len(module_map.page_urls)} page(s) — saved to locator cache",
                     duration_ms=scan_ms,
                 )
             )

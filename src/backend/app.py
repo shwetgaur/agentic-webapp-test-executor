@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from src.agent.parser import parse_plain_text_case
 from src.agent.structured_prompt import structured_prompt_to_suite
+from src.agents.artifact_store import SuiteStore
 from src.agents.orchestrator import AgentOrchestrator
 from src.common.models import StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
@@ -43,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    for sub in ("data/reports", "data/screenshots", "data/logs"):
+    for sub in ("data/reports", "data/screenshots", "data/logs", "data/locators", "data/suites"):
         Path(sub).mkdir(parents=True, exist_ok=True)
     yield
 
@@ -84,6 +85,7 @@ class StructuredRunRequest(BaseModel):
     use_llm: bool = True
     use_discovery: bool = True
     use_healer: bool = True
+    use_replay: bool = False
 
 
 class AgentRunRequest(BaseModel):
@@ -92,6 +94,7 @@ class AgentRunRequest(BaseModel):
     use_llm: bool = True
     use_discovery: bool = True
     use_healer: bool = True
+    use_replay: bool = False
 
 
 def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
@@ -115,6 +118,7 @@ def _run_agents(body: AgentRunRequest) -> TestReport:
             use_llm=body.use_llm,
             use_discovery=body.use_discovery,
             use_healer=body.use_healer,
+            use_replay=body.use_replay,
         ).run(body.prompt).report
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -189,6 +193,7 @@ def run_from_structured(body: StructuredRunRequest):
                     use_llm=body.use_llm,
                     use_discovery=body.use_discovery,
                     use_healer=body.use_healer,
+                    use_replay=body.use_replay,
                 )
             )
         suite = structured_prompt_to_suite(body.prompt)
@@ -205,6 +210,50 @@ def run_from_agents(body: AgentRunRequest):
 @app.post("/api/v1/run/json", response_model=TestReport)
 def run_from_json(body: JsonRunRequest):
     return _execute_suite(body.suite, body.headless)
+
+
+@app.get("/api/v1/suites/{test_id}/latest", response_model=TestSuite)
+def get_latest_suite(test_id: str):
+    suite = SuiteStore().load_latest(test_id)
+    if not suite:
+        raise HTTPException(status_code=404, detail=f"No cached suite for test_id '{test_id}'")
+    return suite
+
+
+@app.get("/api/v1/suites/{test_id}/exists")
+def suite_exists(test_id: str):
+    return {"test_id": test_id, "cached": SuiteStore().has_latest(test_id)}
+
+
+class ReplayRequest(BaseModel):
+    headless: bool = True
+    use_healer: bool = True
+
+
+@app.post("/api/v1/replay/{test_id}", response_model=TestReport)
+def replay_cached_suite(test_id: str, body: ReplayRequest | None = None):
+    body = body or ReplayRequest()
+    suite = SuiteStore().load_latest(test_id)
+    if not suite:
+        raise HTTPException(status_code=404, detail=f"No cached suite for test_id '{test_id}'")
+    try:
+        executor = PlaywrightExecutor(headless=body.headless)
+        healer = None
+        if body.use_healer:
+            from src.agents.healer import HealerAgent
+
+            healer_agent = HealerAgent()
+            healer = healer_agent.heal
+        report = executor.run(suite, healer=healer)
+        report = NotifyAgent().maybe_notify(report)
+        report = report.model_copy(update={"replay_mode": True, "suite_snapshot_path": str(SuiteStore().latest_path(test_id))})
+        save_json_report(report)
+        save_markdown_report(report)
+        save_detailed_log(report)
+        return report
+    except Exception as exc:
+        logger.exception("Replay failed for %s", test_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/v1/reports/{run_id}", response_model=TestReport)
