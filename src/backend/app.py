@@ -20,9 +20,9 @@ from pydantic import BaseModel, Field
 
 from src.agent.parser import parse_plain_text_case
 from src.agent.structured_prompt import structured_prompt_to_suite
-from src.agents.artifact_store import SuiteStore
+from src.agents.artifact_store import LocatorStore, SuiteStore, locator_cache_key
 from src.agents.orchestrator import AgentOrchestrator
-from src.common.models import StructuredTestPrompt, TestReport, TestSuite
+from src.common.models import ModuleMap, StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
@@ -216,6 +216,39 @@ def run_from_agents(body: AgentRunRequest):
 @app.post("/api/v1/run/json", response_model=TestReport)
 def run_from_json(body: JsonRunRequest):
     return _execute_suite(body.suite, body.headless)
+
+
+@app.get("/api/v1/locators", response_model=ModuleMap)
+def get_locator_cache(site_url: str, feature: str):
+    """Download cached discovery map (label → selector) for a site URL + feature."""
+    if not site_url.strip() or not feature.strip():
+        raise HTTPException(status_code=400, detail="site_url and feature are required")
+    module_map = LocatorStore().load(site_url.strip(), feature.strip())
+    if not module_map:
+        key = locator_cache_key(site_url.strip(), feature.strip())
+        raise HTTPException(
+            status_code=404,
+            detail=f"No locator cache for site_url='{site_url}' feature='{feature}' (key={key})",
+        )
+    return module_map
+
+
+@app.get("/api/v1/locators/exists")
+def locator_cache_exists(site_url: str, feature: str):
+    store = LocatorStore()
+    site = site_url.strip()
+    feat = feature.strip()
+    if not site or not feat:
+        raise HTTPException(status_code=400, detail="site_url and feature are required")
+    key = locator_cache_key(site, feat)
+    path = store.path_for(site, feat)
+    return {
+        "site_url": site,
+        "feature": feat,
+        "cache_key": key,
+        "cached": store.has(site, feat),
+        "path": str(path).replace("\\", "/"),
+    }
 
 
 @app.get("/api/v1/suites/{test_id}/latest", response_model=TestSuite)

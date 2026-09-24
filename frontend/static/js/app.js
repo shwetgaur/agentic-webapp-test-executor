@@ -193,6 +193,64 @@ function screenshotUrl(path) {
   return name ? `/api/v1/screenshots/${name}` : null;
 }
 
+/** Site URL + feature used for locator cache (from discovery traces or form). */
+function locatorContextFromReport(report) {
+  const traces = report.agent_traces || [];
+  for (const t of traces) {
+    if (t.agent !== "discovery_agent") continue;
+    const hit = t.detail.match(/for '([^']+)' on (https?:\/\/\S+)/);
+    if (hit) return { site_url: hit[2].replace(/[.,)]+$/, ""), feature: hit[1] };
+    const scan = t.detail.match(/for feature '([^']+)':\s*(https?:\/\/\S+)/);
+    if (scan) return { site_url: scan[2].replace(/,$/, ""), feature: scan[1] };
+  }
+  const featureEl = $("feature");
+  return {
+    site_url: report.site_url || $("site_url")?.value || "",
+    feature: report.module || featureEl?.value || "",
+  };
+}
+
+async function setupLocatorDownload(report) {
+  const locatorLink = $("download-locator");
+  if (!locatorLink) return;
+
+  const ctx = locatorContextFromReport(report);
+  if (!ctx.site_url || !ctx.feature) {
+    locatorLink.classList.add("hidden");
+    return;
+  }
+
+  try {
+    const q = new URLSearchParams({ site_url: ctx.site_url, feature: ctx.feature });
+    const existsRes = await fetch(`/api/v1/locators/exists?${q}`);
+    if (!existsRes.ok) {
+      locatorLink.classList.add("hidden");
+      return;
+    }
+    const exists = await existsRes.json();
+    if (!exists.cached) {
+      locatorLink.classList.add("hidden");
+      return;
+    }
+
+    locatorLink.classList.remove("hidden");
+    locatorLink.onclick = async (ev) => {
+      ev.preventDefault();
+      try {
+        const res = await fetch(`/api/v1/locators?${q}`);
+        if (!res.ok) return;
+        const moduleMap = await res.json();
+        const filename = `${exists.cache_key || "locator_cache"}.json`;
+        downloadBlob(JSON.stringify(moduleMap, null, 2), filename, "application/json");
+      } catch {
+        /* ignore */
+      }
+    };
+  } catch {
+    locatorLink.classList.add("hidden");
+  }
+}
+
 function renderReport(report) {
   lastReport = report;
   lastLog = renderLogFromReport(report);
@@ -334,6 +392,8 @@ function renderReport(report) {
   } else if (suiteLink) {
     suiteLink.classList.add("hidden");
   }
+
+  setupLocatorDownload(report);
 
   const notify = report.notify || {};
   const nbox = $("notify-box");

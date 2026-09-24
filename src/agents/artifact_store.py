@@ -50,6 +50,9 @@ class LocatorStore:
             return self.save(existing.model_copy(update={"elements": merged}))
         return self.save(ModuleMap(site_url=site_url, feature=feature, elements=updates))
 
+    def has(self, site_url: str, feature: str) -> bool:
+        return self.path_for(site_url, feature).is_file()
+
 
 class SuiteStore:
     """Store enriched TestSuite JSON for replay without re-running agents."""

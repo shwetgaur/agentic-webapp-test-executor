@@ -58,10 +58,11 @@ Typical bottlenecks (from execution logs): **execute** (Playwright browser), **d
 - Discovery results saved under `data/locators/` and reused on the same site + feature
 - Enriched TestSuite saved under `data/suites/{test_id}_latest.json` after each agent run
 - **Replay cached suite** in the UI (or `--replay` CLI) skips LLM + discovery for faster runs
-- API: `GET /api/v1/suites/{test_id}/latest`, `POST /api/v1/replay/{test_id}`
+- API: `GET /api/v1/suites/{test_id}/latest`, `GET /api/v1/locators?site_url=...&feature=...`, `POST /api/v1/replay/{test_id}`
 
 ## Documentation
 
+- [System Architecture (Phase-2)](docs/ARCHITECTURE.md) — 3-agent pipeline, caching, observability, Cloud Run, API
 - [Deploy on Cloud Run](docs/DEPLOY_CLOUD_RUN.md) — GCP production deploy (Playwright Docker)
 - [MVP Specification (Phase-1)](docs/MVP_SPECIFICATION.md) — Phase-1 baseline document
 - [Phase-2 Specification](docs/PHASE2_SPECIFICATION.md) — 3-agent pipeline, web UI, cloud deploy
