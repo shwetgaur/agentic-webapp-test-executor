@@ -1,0 +1,16 @@
+test_id: ZOHO_TC05_projects_after_login
+site_url: https://www.zoho.com/projects/
+feature: login
+test_name: Zoho login then Projects page (multi-URL discovery + suite cache)
+objective: Multi-URL flow — discovery scans sign-in and Projects pages; enriched suite saved for Replay on second run
+expected_outcome: After login, Projects marketing URL and visible Projects text; download cached suite JSON after first PASS
+environment: develop
+owner_team: auth-frontend
+steps:
+  - Open https://accounts.zoho.com/signin
+  - Fill email with YOUR_ZOHO_EMAIL
+  - Fill password with YOUR_ZOHO_PASSWORD
+  - Click Sign in
+  - Open https://www.zoho.com/projects/
+  - Verify URL contains zoho.com/projects
+  - Verify text Projects is visible

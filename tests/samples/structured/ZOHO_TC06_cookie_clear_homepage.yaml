@@ -1,0 +1,13 @@
+test_id: ZOHO_TC06_cookie_clear_homepage
+site_url: https://www.zoho.com/
+feature: navigation
+test_name: Clear cookies then open Zoho homepage (session isolation)
+objective: Verify clear_cookies step and fresh browser state before navigation on industry site
+expected_outcome: Cookies cleared, homepage loads, Zoho text visible
+environment: develop
+owner_team: industry-qa
+steps:
+  - Clear cookies
+  - Open https://www.zoho.com/
+  - Verify URL contains zoho.com
+  - Verify that the Zoho text is visible

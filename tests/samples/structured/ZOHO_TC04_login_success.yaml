@@ -1,0 +1,14 @@
+test_id: ZOHO_TC04_login_success
+site_url: https://accounts.zoho.com/signin
+feature: login
+test_name: Zoho account login (replace credentials before run)
+objective: Full 3-agent pipeline with LLM planner/generator, discovery, and healer on Zoho Accounts
+expected_outcome: User is redirected after successful sign-in; check LangSmith for llm.planner and llm.generator token usage
+environment: develop
+owner_team: auth-frontend
+steps:
+  - Open https://accounts.zoho.com/signin
+  - Fill email with YOUR_ZOHO_EMAIL
+  - Fill password with YOUR_ZOHO_PASSWORD
+  - Click Sign in
+  - Verify URL contains zoho.com

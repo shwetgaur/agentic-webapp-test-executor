@@ -37,6 +37,12 @@ SAMPLE_MAP = {
     "tc01": "TC01_login_success.yaml",
     "tc10": "TC10_intentional_fail.yaml",
     "cv01": "CV_test_login_1.yaml",
+    "zoho01": "ZOHO_TC01_homepage.yaml",
+    "zoho02": "ZOHO_TC02_projects_marketing.yaml",
+    "zoho03": "ZOHO_TC03_signin_discovery.yaml",
+    "zoho04": "ZOHO_TC04_login_success.yaml",
+    "zoho05": "ZOHO_TC05_projects_after_login.yaml",
+    "zoho06": "ZOHO_TC06_cookie_clear_homepage.yaml",
 }
 
 logger = logging.getLogger(__name__)

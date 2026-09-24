@@ -1,0 +1,12 @@
+test_id: ZOHO_TC03_signin_discovery
+site_url: https://accounts.zoho.com/signin
+feature: login
+test_name: Zoho sign-in page discovery (locator cache — run twice)
+objective: Discovery agent scans sign-in page and maps email/password selectors; second run should hit locator cache
+expected_outcome: Sign-in page loads and login form fields are discoverable (run again with Replay OFF to compare cache_hit trace)
+environment: develop
+owner_team: auth-frontend
+steps:
+  - Open https://accounts.zoho.com/signin
+  - Verify URL contains zoho.com
+  - Verify text Sign in is visible

@@ -1,0 +1,12 @@
+test_id: ZOHO_TC02_projects_marketing
+site_url: https://www.zoho.com/projects/
+feature: navigation
+test_name: Zoho Projects marketing page (redirect-aware URL assert)
+objective: Verify Projects marketing page is reachable and URL assertions work after marketing redirects
+expected_outcome: URL contains projects path and Projects text is visible
+environment: develop
+owner_team: industry-qa
+steps:
+  - Open the site https://www.zoho.com/projects/
+  - Verify URL contains zoho.com/projects
+  - Verify text Projects is visible

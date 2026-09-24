@@ -37,9 +37,23 @@
           <label for="sample-select">Load sample</label>
           <select id="sample-select">
             <option value="">— Select —</option>
-            <option value="tc01">TC01 Login PASS</option>
-            <option value="tc10">TC10 Intentional FAIL</option>
-            <option value="cv01">CV01 Campus Voice Login</option>
+            <optgroup label="Sauce Demo">
+              <option value="tc01">TC01 Login PASS</option>
+              <option value="tc10">TC10 Intentional FAIL</option>
+            </optgroup>
+            <optgroup label="Campus Voice">
+              <option value="cv01">CV01 Campus Voice Login</option>
+            </optgroup>
+            <optgroup label="Zoho — public (no credentials)">
+              <option value="zoho01">ZOHO TC01 Homepage (observability)</option>
+              <option value="zoho02">ZOHO TC02 Projects marketing</option>
+              <option value="zoho03">ZOHO TC03 Sign-in discovery (locator cache)</option>
+              <option value="zoho06">ZOHO TC06 Clear cookies + homepage</option>
+            </optgroup>
+            <optgroup label="Zoho — login (edit email/password in steps)">
+              <option value="zoho04">ZOHO TC04 Login success</option>
+              <option value="zoho05">ZOHO TC05 Login + Projects (replay demo)</option>
+            </optgroup>
           </select>
         </div>
 
@@ -152,6 +166,6 @@
       <a href="https://github.com/shwetgaur/agentic-webapp-test-executor" target="_blank" rel="noopener">GitHub</a>
     </footer>
 
-    <script src="/static/js/app.js?v=5"></script>
+    <script src="/static/js/app.js?v=6"></script>
   </body>
 </html>

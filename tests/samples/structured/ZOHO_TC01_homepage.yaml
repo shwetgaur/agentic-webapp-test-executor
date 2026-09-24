@@ -1,0 +1,12 @@
+test_id: ZOHO_TC01_homepage
+site_url: https://www.zoho.com/
+feature: navigation
+test_name: Zoho homepage loads (public — observability demo)
+objective: Verify Zoho marketing homepage opens on a slow industry site; check LLM tokens and phase timings in report
+expected_outcome: Homepage loads with Zoho-related URL and visible brand text
+environment: develop
+owner_team: industry-qa
+steps:
+  - Open https://www.zoho.com/
+  - Verify URL contains zoho.com
+  - Verify that the Zoho text is visible
