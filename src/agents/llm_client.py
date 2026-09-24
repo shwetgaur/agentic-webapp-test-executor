@@ -64,6 +64,7 @@ class LLMClient:
             provider=self.provider,
             model=self.model,
         )
+        content: str | None = None
         try:
             if self.provider == "ollama":
                 content, prompt_t, completion_t, total_t = self._ollama_chat(system, user, temperature)
@@ -84,7 +85,13 @@ class LLMClient:
             record.latency_ms = int((time.perf_counter() - started) * 1000)
             self.call_log.append(record)
             self.last_call = record
-            maybe_export_langsmith(record, run_id=self.run_id)
+            maybe_export_langsmith(
+                record,
+                run_id=self.run_id,
+                system=system,
+                user=user,
+                assistant_content=content,
+            )
 
     def chat_json(self, system: str, user: str, *, caller: str = "unknown") -> Optional[Any]:
         raw = self.chat(system, user, caller=caller)
