@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 import logging
 
 import yaml
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -24,6 +24,7 @@ from src.agents.artifact_store import LocatorStore, SuiteStore, locator_cache_ke
 from src.agents.orchestrator import AgentOrchestrator
 from src.common.models import ModuleMap, StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
+from src.importers.excel_importer import parse_excel_bytes
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
 from src.reporting.detailed_log import render_detailed_log, save_detailed_log
@@ -262,6 +263,56 @@ def get_latest_suite(test_id: str):
 @app.get("/api/v1/suites/{test_id}/exists")
 def suite_exists(test_id: str):
     return {"test_id": test_id, "cached": SuiteStore().has_latest(test_id)}
+
+
+class SuiteUploadBody(BaseModel):
+    test_id: str = Field(..., min_length=1)
+    suite: TestSuite
+
+
+@app.post("/api/v1/suites/upload")
+def upload_cached_suite(body: SuiteUploadBody):
+    """Restore replay cache after redeploy (upload downloaded *_suite.json)."""
+    store = SuiteStore()
+    path = store.save_latest(body.test_id, body.suite)
+    return {
+        "test_id": body.test_id,
+        "cached": True,
+        "path": str(path).replace("\\", "/"),
+        "storage": settings.artifact_storage,
+    }
+
+
+@app.post("/api/v1/import/excel")
+async def import_excel_tests(file: UploadFile = File(...), sheet_index: int = 0):
+    """Parse Dassault/QA Excel template into structured test prompts."""
+    name = (file.filename or "").lower()
+    if not name.endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Upload a .xlsx or .xlsm file")
+    try:
+        data = await file.read()
+        prompts = parse_excel_bytes(data, sheet_index=sheet_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Excel import failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "count": len(prompts),
+        "prompts": [p.model_dump(mode="json") for p in prompts],
+    }
+
+
+@app.get("/api/v1/storage/status")
+def storage_status():
+    return {
+        "artifact_storage": settings.artifact_storage,
+        "gcs_bucket": settings.gcs_bucket,
+        "gcs_prefix": settings.gcs_prefix,
+        "note": (
+            "Use ARTIFACT_STORAGE=gcs and GCS_BUCKET on Cloud Run for persistent locator/suite cache."
+        ),
+    }
 
 
 class ReplayRequest(BaseModel):

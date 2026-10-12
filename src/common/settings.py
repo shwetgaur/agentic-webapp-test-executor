@@ -32,5 +32,10 @@ class Settings(BaseSettings):
     goto_wait_until: str = "domcontentloaded"
     clear_browser_state_on_run: bool = True
 
+    # Artifact persistence: local (default) or gcs (Cloud Run + bucket)
+    artifact_storage: str = "local"
+    gcs_bucket: str | None = None
+    gcs_prefix: str = "agentic-test-executor"
+
 
 settings = Settings()

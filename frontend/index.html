@@ -55,6 +55,10 @@
               <option value="zoho05">ZOHO TC05 Login + Projects (replay demo)</option>
             </optgroup>
           </select>
+          <input type="file" id="excel-file" accept=".xlsx,.xlsm" class="hidden" />
+          <button type="button" class="btn-secondary" id="import-excel-btn">Import Excel</button>
+          <input type="file" id="suite-upload-file" accept=".json,application/json" class="hidden" />
+          <button type="button" class="btn-secondary" id="upload-suite-btn">Upload cached suite JSON</button>
         </div>
 
         <form id="test-form" class="form-grid">
@@ -105,8 +109,9 @@
             <label class="check"><input type="checkbox" id="use_discovery" checked /> Module Discovery</label>
             <label class="check"><input type="checkbox" id="use_healer" checked /> Healer on failure</label>
             <label class="check"><input type="checkbox" id="use_replay" /> Replay cached suite (skip LLM + discovery)</label>
-            <label class="check"><input type="checkbox" id="headless" checked /> Headless browser</label>
+            <label class="check"><input type="checkbox" id="headless" checked /> Headless browser (uncheck for visible replay — local runs)</label>
           </div>
+          <p class="options-hint span-2">Replay + visible browser: uncheck Headless and check Replay. Cloud Run still requires headless.</p>
 
           <button type="submit" class="btn-primary span-2" id="run-btn">Run Test</button>
         </form>
@@ -167,6 +172,6 @@
       <a href="https://github.com/shwetgaur/agentic-webapp-test-executor" target="_blank" rel="noopener">GitHub</a>
     </footer>
 
-    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/app.js?v=8"></script>
   </body>
 </html>

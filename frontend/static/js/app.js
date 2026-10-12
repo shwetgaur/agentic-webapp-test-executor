@@ -19,11 +19,7 @@ async function checkHealth() {
   }
 }
 
-async function loadSample(id) {
-  if (!id) return;
-  const res = await fetch(`/api/v1/samples/${id}`);
-  if (!res.ok) return;
-  const data = await res.json();
+function fillPromptForm(data) {
   $("test_id").value = data.test_id || "";
   $("site_url").value = data.site_url || "";
   $("feature").value = data.feature || "";
@@ -33,6 +29,64 @@ async function loadSample(id) {
   $("environment").value = data.environment || "develop";
   $("owner_team").value = data.owner_team || "";
   $("steps").value = (data.steps || []).join("\n");
+}
+
+async function loadSample(id) {
+  if (!id) return;
+  const res = await fetch(`/api/v1/samples/${id}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  fillPromptForm(data);
+}
+
+async function importExcelFile(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/v1/import/excel", { method: "POST", body: form });
+  const { data, raw } = await parseJsonResponse(res);
+  if (!res.ok) {
+    showError(data?.detail ? String(data.detail) : raw || "Excel import failed");
+    return;
+  }
+  if (!data?.prompts?.length) {
+    showError("Excel file contained no test cases.");
+    return;
+  }
+  clearError();
+  fillPromptForm(data.prompts[0]);
+  showDownloadHint(
+    data.count > 1
+      ? `Loaded first of ${data.count} test cases from Excel.`
+      : "Loaded test case from Excel."
+  );
+}
+
+async function uploadSuiteJsonFile(file) {
+  const text = await file.text();
+  let suite;
+  try {
+    suite = JSON.parse(text);
+  } catch {
+    showError("Invalid JSON file.");
+    return;
+  }
+  const testId = suite.suite_id || $("test_id").value.trim();
+  if (!testId) {
+    showError("Suite JSON must include suite_id or fill Test ID first.");
+    return;
+  }
+  const res = await fetch("/api/v1/suites/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ test_id: testId, suite }),
+  });
+  const { data, raw } = await parseJsonResponse(res);
+  if (!res.ok) {
+    showError(data?.detail ? String(data.detail) : raw || "Suite upload failed");
+    return;
+  }
+  clearError();
+  showDownloadHint(`Cached suite saved for ${testId}. You can run with Replay checked.`);
 }
 
 function buildPrompt() {
@@ -526,4 +580,26 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     downloadLogSync();
   });
+
+  const excelInput = $("excel-file");
+  const excelBtn = $("import-excel-btn");
+  if (excelBtn && excelInput) {
+    excelBtn.addEventListener("click", () => excelInput.click());
+    excelInput.addEventListener("change", () => {
+      const f = excelInput.files?.[0];
+      if (f) importExcelFile(f);
+      excelInput.value = "";
+    });
+  }
+
+  const suiteInput = $("suite-upload-file");
+  const suiteBtn = $("upload-suite-btn");
+  if (suiteBtn && suiteInput) {
+    suiteBtn.addEventListener("click", () => suiteInput.click());
+    suiteInput.addEventListener("change", () => {
+      const f = suiteInput.files?.[0];
+      if (f) uploadSuiteJsonFile(f);
+      suiteInput.value = "";
+    });
+  }
 });

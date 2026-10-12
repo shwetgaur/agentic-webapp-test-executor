@@ -32,7 +32,7 @@ gcloud run deploy agentic-webapp-test-executor \
   --timeout 900 \
   --concurrency 4 \
   --max-instances 3 \
-  --set-env-vars "HEADLESS=true,LLM_PROVIDER=groq,LLM_MODEL=openai/gpt-oss-20b,PLAYWRIGHT_NO_SANDBOX=true,NOTIFY_ENABLED=true,NOTIFY_CHANNEL=console,NAVIGATION_TIMEOUT_MS=45000,GOTO_WAIT_UNTIL=domcontentloaded,LANGSMITH_PROJECT=agentic-test-executor,LANGSMITH_TRACING_ENABLED=true" \
+  --set-env-vars "HEADLESS=true,LLM_PROVIDER=groq,LLM_MODEL=openai/gpt-oss-20b,PLAYWRIGHT_NO_SANDBOX=true,NOTIFY_ENABLED=true,NOTIFY_CHANNEL=console,NAVIGATION_TIMEOUT_MS=45000,GOTO_WAIT_UNTIL=domcontentloaded,LANGSMITH_PROJECT=agentic-test-executor,LANGSMITH_TRACING_ENABLED=true,ARTIFACT_STORAGE=gcs,GCS_BUCKET=YOUR_BUCKET_NAME,GCS_PREFIX=agentic-test-executor" \
   --set-secrets "GROQ_API_KEY=GROQ_API_KEY:latest,LANGSMITH_API_KEY=LANGSMITH_API_KEY:latest"
 ```
 
@@ -46,6 +46,13 @@ If you are not using Secret Manager yet, set keys in the [Cloud Run console](htt
 | `LANGSMITH_TRACING_ENABLED` | `true` |
 | `PLAYWRIGHT_NO_SANDBOX` | `true` |
 | `HEADLESS` | `true` |
+| `ARTIFACT_STORAGE` | `local` or `gcs` (use `gcs` on Cloud Run for persistent cache) |
+| `GCS_BUCKET` | Your bucket name (required when `ARTIFACT_STORAGE=gcs`) |
+| `GCS_PREFIX` | Optional folder prefix, e.g. `agentic-test-executor` |
+
+Grant the Cloud Run service account **Storage Object Admin** (or create/read/write) on the bucket so locator and suite JSON survive redeploys.
+
+**Visible browser:** Uncheck **Headless** in the UI for local demos only. Cloud Run has no display — keep `HEADLESS=true` in production.
 
 ## Health check (UptimeRobot / monitoring)
 
@@ -79,6 +86,8 @@ Runs appear as `llm.planner`, `llm.generator`, `llm.healer`.
 | Cold start slow | Set **min instances = 1** (costs more) or use UptimeRobot on `/ping` |
 | 500 on first test | Wait for cold start; check Cloud Run **Logs** in GCP console |
 | LangSmith empty | Confirm `LANGSMITH_TRACING_ENABLED=true` and LLM toggle is ON in UI |
+| Cache lost after redeploy | Set `ARTIFACT_STORAGE=gcs` + `GCS_BUCKET`, or use **Upload cached suite JSON** in UI |
+| Excel import fails | Use `.xlsx` with headers: Test ID, Site URL, Feature, Test Name, Objective, Expected Outcome, Steps |
 
 ## Legacy: Render
 
