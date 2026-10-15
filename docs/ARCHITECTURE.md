@@ -52,7 +52,9 @@ Validated by Pydantic and JSON Schema before any browser run.
 | Reduce execution time | Locator cache skip; single browser across discovery URLs; capped waits | `discovery_agent.py`, `runner.py` |
 | Cookie / session isolation | `CLEAR_COOKIES`, `CLEAR_STORAGE`; clear state before each run | `parser.py`, `runner.py`, `settings.py` |
 | Healer trace accumulation | Healer traces append to pipeline audit (no per-call reset leak) | `healer.py`, `test_report_agent.py` |
-| Excel import | **Deferred** — awaiting Dassault template | — |
+| Excel import | ✅ Done | `src/importers/excel_importer.py`, `POST /api/v1/import/excel` |
+| GCS artifact backend | ✅ Done | `src/agents/artifact_storage.py`, env `ARTIFACT_STORAGE=gcs` |
+| Suite upload (restore replay) | ✅ Done | `POST /api/v1/suites/upload`, UI upload |
 
 ---
 
@@ -306,6 +308,9 @@ StructuredTestPrompt
 | `GET` | `/api/v1/reports/{run_id}/markdown` | Fetch Markdown report |
 | `GET` | `/api/v1/reports/{run_id}/log` | Fetch detailed log |
 | `GET` | `/api/v1/screenshots/{filename}` | Failure screenshot |
+| `POST` | `/api/v1/suites/upload` | Restore cached suite JSON after redeploy |
+| `POST` | `/api/v1/import/excel` | Parse `.xlsx` → structured prompts |
+| `GET` | `/api/v1/storage/status` | Report `local` vs `gcs` artifact backend |
 
 ### 9.1 Agent run request body
 
@@ -334,6 +339,8 @@ When `use_replay=true`, the orchestrator forces LLM and discovery off regardless
 | Load sample | Sauce Demo, Campus Voice, Zoho TC01–TC06 |
 | Pipeline toggles | LLM, discovery, healer, replay, headless |
 | Results panel | Step timings, agent traces, performance + LLM table |
+| Import Excel | Bulk load structured prompts |
+| Upload suite | Restore replay JSON after Cloud Run redeploy |
 | Downloads | JSON report, Markdown, detailed log, cached suite JSON |
 
 ---
@@ -354,27 +361,27 @@ When `use_replay=true`, the orchestrator forces LLM and discovery off regardless
 
 See [DEPLOY_CLOUD_RUN.md](./DEPLOY_CLOUD_RUN.md).
 
-### 11.2 Ephemeral storage on Cloud Run
+### 11.2 Artifact storage (local + optional GCS)
 
-All artifacts write to the **container filesystem**:
+**Module:** `src/agents/artifact_storage.py` · **Stores:** `LocatorStore`, `SuiteStore`
 
-```
-data/
-├── locators/      # selector maps — lost on redeploy / new instance
-├── suites/        # replay scripts — lost on redeploy / new instance
-├── reports/       # run reports
-├── logs/          # detailed logs
-└── screenshots/   # failure PNGs
-```
+| `ARTIFACT_STORAGE` | Behaviour |
+|---|---|
+| `local` (default) | Read/write under `data/locators/` and `data/suites/` on container disk |
+| `gcs` | Requires `GCS_BUCKET`; locators/suites persist across Cloud Run redeploys |
+
+Dual-write: saves go to the configured backend **and** local paths for developer fallback.
+
+Reports, logs, and screenshots still use `data/reports/`, `data/logs/`, `data/screenshots/` on the instance.
 
 | Scenario | Cache behaviour |
 |---|---|
-| Two runs, same warm instance | Locator + suite cache available; replay works |
-| Redeploy or cold start | Cache empty; must re-run full pipeline |
-| Multiple Cloud Run instances | Cache not shared between instances |
-| Downloaded suite JSON | Persists on user's machine; re-run via `POST /api/v1/run/json` locally |
+| Same warm Cloud Run instance + `local` | Locator + suite cache available; replay works |
+| Redeploy with `local` only | Cache empty; re-run full pipeline or `POST /api/v1/suites/upload` |
+| Redeploy with `gcs` | Locators/suites restored from bucket if configured |
+| Downloaded suite JSON | User machine; upload via UI or `POST /api/v1/suites/upload` |
 
-**Planned (Phase-3):** GCS-backed `LocatorStore` / `SuiteStore` or SQLite run history.
+See [PHASE2_ARCHITECTURE.md](./PHASE2_ARCHITECTURE.md) §5 for the storage diagram.
 
 ---
 
@@ -403,6 +410,8 @@ Located in `tests/samples/structured/ZOHO_TC*.yaml`.
 | `src/agents/test_report_agent.py` | Agent 3 — execute, heal, report, notify |
 | `src/agents/healer.py` | Locator recovery on failure |
 | `src/agents/artifact_store.py` | `LocatorStore`, `SuiteStore` |
+| `src/agents/artifact_storage.py` | Local vs GCS `ArtifactBackend` |
+| `src/importers/excel_importer.py` | Excel → `StructuredTestPrompt` list |
 | `src/agents/llm_client.py` | LLM providers + call logging |
 | `src/agents/llm_observability.py` | LangSmith export, token parsing |
 | `src/agent/parser.py` | Rule-based step parser |
@@ -441,14 +450,12 @@ python scripts/run_suite.py --json path/to/suite.json
 
 | Limitation | Impact |
 |---|---|
-| Cloud Run ephemeral disk | Locator + suite cache lost on redeploy; replay fails until full run |
-| No suite upload API | Downloaded JSON cannot be re-imported via UI |
+| Cloud Run + `local` storage | Locator + suite cache lost on redeploy unless GCS or suite upload |
 | Action steps ≠ auth proof | Fill/click pass without verifying login succeeded |
 | Post-auth wait swallows timeout | Sign-in step may pass while still on login page |
 | Zoho regional TLD | `zoho.com` assert fails on `zoho.in` |
 | Zoho two-step login | Requires `Click Next` before password fill |
 | Public marketing URLs | TC05 asserts public page — passes without login |
-| Excel import | Not implemented — awaiting Dassault template |
 | Captcha / MFA | Headless login may fail — documented out of scope |
 
 ---
@@ -467,12 +474,12 @@ pytest tests/unit -q
 
 | Item | Description |
 |---|---|
-| Persistent cache | GCS or SQLite for locators, suites, run history |
-| Suite upload | `POST /api/v1/suites/upload` for replay after redeploy |
+| Run history DB | SQLite/Postgres for reports across instances |
+| GCS for reports/logs | Optional object storage for all artifacts |
 | Auth assertions | Post-login checks; fail if still on `/signin` |
-| Excel import | When Dassault template arrives |
 | CI GitHub Action | Run sample suite on push |
 | Slack notify | Wire `SLACK_WEBHOOK_URL` in production |
+| ClickUp integration | When Dassault provides access |
 
 ---
 
@@ -480,6 +487,7 @@ pytest tests/unit -q
 
 | Document | Content |
 |---|---|
+| [PHASE2_ARCHITECTURE.md](./PHASE2_ARCHITECTURE.md) | **Phase requirements** — visible browser, Excel import, mentor items |
 | [PHASE2_SPECIFICATION.md](./PHASE2_SPECIFICATION.md) | Feature spec and demo script |
 | [STRUCTURED_PROMPT.md](./STRUCTURED_PROMPT.md) | Input contract for testers |
 | [DEPLOY_CLOUD_RUN.md](./DEPLOY_CLOUD_RUN.md) | GCP deploy guide |
@@ -488,4 +496,4 @@ pytest tests/unit -q
 
 ---
 
-*Last updated: September 2026 — reflects Sep 3 mentor action items, Cloud Run deployment, Zoho sample corpus, and two-tier caching architecture.*
+*Last updated: October 2026 — Sep 3/24 mentor items, GCS + Excel + suite upload, Cloud Run deployment.*
