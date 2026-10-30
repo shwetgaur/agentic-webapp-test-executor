@@ -305,8 +305,156 @@ async function setupLocatorDownload(report) {
   }
 }
 
+function sumLlmTokens(llmCalls) {
+  let prompt = 0;
+  let completion = 0;
+  let total = 0;
+  for (const c of llmCalls || []) {
+    prompt += c.prompt_tokens || 0;
+    completion += c.completion_tokens || 0;
+    total += c.total_tokens || 0;
+  }
+  return { prompt, completion, total };
+}
+
+function updateTokenUsageBar(report) {
+  if (!report) {
+    $("token-prompt").textContent = "Prompt: —";
+    $("token-completion").textContent = "Completion: —";
+    $("token-total").textContent = "Total: —";
+    return;
+  }
+  const llmCalls = report.llm_calls || [];
+  const sums = sumLlmTokens(llmCalls);
+  const has = llmCalls.length > 0;
+  $("token-prompt").textContent = has ? `Prompt: ${sums.prompt}` : "Prompt: —";
+  $("token-completion").textContent = has ? `Completion: ${sums.completion}` : "Completion: —";
+  $("token-total").textContent = has ? `Total: ${sums.total}` : "Total: —";
+}
+
+function renderTokenUsagePanel(report) {
+  const panel = $("token-usage-panel");
+  if (!panel) return;
+  panel.innerHTML = "";
+  const llmCalls = report.llm_calls || [];
+  const sums = sumLlmTokens(llmCalls);
+  if (!llmCalls.length) {
+    const mode = report.execution_mode || "unknown";
+    panel.innerHTML =
+      `<div class="token-stat"><span>Run mode</span><strong>${mode}</strong></div>` +
+      `<div class="token-stat"><span>LLM tokens</span><strong>0</strong><span>No LLM calls (direct JSON or replay).</span></div>`;
+    return;
+  }
+  const cards = [
+    ["Prompt tokens", sums.prompt],
+    ["Completion tokens", sums.completion],
+    ["Total tokens", sums.total],
+    ["LLM calls", llmCalls.length],
+  ];
+  for (const [label, val] of cards) {
+    const div = document.createElement("div");
+    div.className = "token-stat";
+    div.innerHTML = `<span>${label}</span><strong>${val}</strong>`;
+    panel.appendChild(div);
+  }
+}
+
+function parseSuiteJsonText(text) {
+  const suite = JSON.parse(text);
+  if (!suite.steps?.length) throw new Error("TestSuite JSON must include a non-empty steps array.");
+  if (!suite.suite_id) throw new Error("TestSuite JSON must include suite_id.");
+  return suite;
+}
+
+async function loadCachedSuiteIntoTextarea() {
+  const testId = $("test_id").value.trim();
+  if (!testId) {
+    showError("Enter Test ID to load cached suite.");
+    return;
+  }
+  const res = await fetch(`/api/v1/suites/${encodeURIComponent(testId)}/latest`);
+  const { data, raw } = await parseJsonResponse(res);
+  if (!res.ok) {
+    showError(data?.detail ? String(data.detail) : raw || "No cached suite for this Test ID.");
+    return;
+  }
+  $("suite-json").value = JSON.stringify(data, null, 2);
+  clearError();
+  showDownloadHint(`Loaded cached suite for ${testId}. Click Run Playwright (JSON).`);
+}
+
+async function exportPlaywrightSpec() {
+  const text = $("suite-json").value.trim();
+  if (!text) {
+    showError("Paste or load TestSuite JSON first.");
+    return;
+  }
+  let suite;
+  try {
+    suite = parseSuiteJsonText(text);
+  } catch (err) {
+    showError(String(err.message || err));
+    return;
+  }
+  const res = await fetch("/api/v1/suites/export/playwright", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(suite),
+  });
+  if (!res.ok) {
+    const { data, raw } = await parseJsonResponse(res);
+    showError(data?.detail ? String(data.detail) : raw || "Export failed");
+    return;
+  }
+  const spec = await res.text();
+  downloadBlob(spec, `${suite.suite_id}_playwright.spec.ts`, "text/plain;charset=utf-8");
+  clearError();
+}
+
+async function runJsonPlaywright() {
+  const text = $("suite-json").value.trim();
+  if (!text) {
+    showError("Paste TestSuite JSON to run Playwright directly.");
+    return;
+  }
+  let suite;
+  try {
+    suite = parseSuiteJsonText(text);
+  } catch (err) {
+    showError(String(err.message || err));
+    return;
+  }
+  clearError();
+  showLoading(true);
+  $("run-json-btn").disabled = true;
+  try {
+    const res = await fetch("/api/v1/run/json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suite, headless: $("headless").checked }),
+    });
+    const { data, raw } = await parseJsonResponse(res);
+    if (!res.ok) {
+      showError(data?.detail ? String(data.detail) : raw || `Request failed (${res.status})`);
+      return;
+    }
+    renderReport(data);
+    lastMarkdown = await fetchMarkdown(data.run_id);
+    const serverLog = await fetchLog(data.run_id);
+    if (serverLog) lastLog = serverLog;
+    showDownloadHint("Direct Playwright run complete (TestSuite JSON → executor).");
+  } catch (err) {
+    showError(String(err));
+  } finally {
+    showLoading(false);
+    $("run-json-btn").disabled = false;
+  }
+}
+
 function renderReport(report) {
   lastReport = report;
+  updateTokenUsageBar(report);
+  renderTokenUsagePanel(report);
   lastLog = renderLogFromReport(report);
   updateDownloadLinks(report);
   clearError();
@@ -379,6 +527,12 @@ function renderReport(report) {
   perf.innerHTML = "";
   const phaseTimings = report.phase_timings || [];
   const llmCalls = report.llm_calls || [];
+  if (report.execution_mode === "direct_json") {
+    const tag = document.createElement("div");
+    tag.className = "perf-tag";
+    tag.textContent = "Direct Playwright — TestSuite JSON (no agents)";
+    perf.appendChild(tag);
+  }
   if (phaseTimings.length || llmCalls.length || report.replay_mode) {
     if (report.replay_mode) {
       const tag = document.createElement("div");
@@ -572,6 +726,7 @@ function downloadLogSync() {
 
 document.addEventListener("DOMContentLoaded", () => {
   checkHealth();
+  updateTokenUsageBar(null);
   $("test-form").addEventListener("submit", runTest);
   $("sample-select").addEventListener("change", (e) => loadSample(e.target.value));
   $("download-json").addEventListener("click", downloadJson);
@@ -602,4 +757,17 @@ document.addEventListener("DOMContentLoaded", () => {
       suiteInput.value = "";
     });
   }
+
+  const suiteRunFile = $("suite-run-file");
+  $("load-suite-json-btn")?.addEventListener("click", () => suiteRunFile?.click());
+  suiteRunFile?.addEventListener("change", async () => {
+    const f = suiteRunFile.files?.[0];
+    if (!f) return;
+    $("suite-json").value = await f.text();
+    suiteRunFile.value = "";
+    clearError();
+  });
+  $("load-cached-suite-btn")?.addEventListener("click", () => loadCachedSuiteIntoTextarea());
+  $("export-playwright-btn")?.addEventListener("click", () => exportPlaywrightSpec());
+  $("run-json-btn")?.addEventListener("click", () => runJsonPlaywright());
 });

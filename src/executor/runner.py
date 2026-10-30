@@ -67,6 +67,24 @@ def _clear_browser_state(context, page) -> None:
         pass
 
 
+def _wait_for_password_field(page, timeout_ms: int) -> None:
+    """Zoho and similar flows reveal password only after email + Next."""
+    deadline = min(timeout_ms, 20000)
+    for sel in ("#password", "input[type='password']"):
+        try:
+            page.locator(sel).first.wait_for(state="visible", timeout=deadline)
+            return
+        except PlaywrightTimeoutError:
+            continue
+
+
+def _fill_visible(page, selector: str, value: str, timeout_ms: int) -> None:
+    loc = page.locator(selector).first
+    loc.wait_for(state="visible", timeout=timeout_ms)
+    loc.click(timeout=timeout_ms)
+    loc.fill(value or "", timeout=timeout_ms)
+
+
 def _wait_for_url_match(page, expected: str, timeout_ms: int) -> str:
     """Wait until page URL matches expected fragment or timeout."""
     try:
@@ -282,14 +300,20 @@ class PlaywrightExecutor:
         if action == StepAction.FILL:
             if not step.selector:
                 raise ValueError("fill requires selector")
-            page.fill(step.selector, step.value or "")
+            desc = (step.description or "").lower()
+            if "password" in desc:
+                _wait_for_password_field(page, self.timeout_ms)
+            _fill_visible(page, step.selector, step.value or "", self.timeout_ms)
             return step.value or ""
         if action == StepAction.CLICK:
             if not step.selector:
                 raise ValueError("click requires selector")
             prior_url = page.url
+            desc = (step.description or "").lower()
             page.click(step.selector)
-            if _is_auth_submit_click(step):
+            if "next" in desc and "sign in" not in desc and "sign-in" not in desc:
+                _wait_for_password_field(page, self.timeout_ms)
+            elif _is_auth_submit_click(step):
                 _wait_for_auth_navigation(page, prior_url, self.timeout_ms)
             return f"clicked:{step.selector}"
         if action == StepAction.SELECT:

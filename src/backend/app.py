@@ -25,6 +25,7 @@ from src.agents.orchestrator import AgentOrchestrator
 from src.common.models import ModuleMap, StructuredTestPrompt, TestReport, TestSuite
 from src.common.settings import settings
 from src.importers.excel_importer import parse_excel_bytes
+from src.executor.playwright_export import suite_to_playwright_spec
 from src.executor.runner import PlaywrightExecutor
 from src.notify.agent import NotifyAgent
 from src.reporting.detailed_log import render_detailed_log, save_detailed_log
@@ -104,10 +105,16 @@ class AgentRunRequest(BaseModel):
     use_replay: bool = False
 
 
-def _execute_suite(suite: TestSuite, headless: bool) -> TestReport:
+def _execute_suite(
+    suite: TestSuite,
+    headless: bool,
+    *,
+    execution_mode: str = "direct_json",
+) -> TestReport:
     try:
         executor = PlaywrightExecutor(headless=headless)
         report = executor.run(suite)
+        report = report.model_copy(update={"execution_mode": execution_mode})
         report = NotifyAgent().maybe_notify(report)
         save_json_report(report)
         save_markdown_report(report)
@@ -186,7 +193,7 @@ def run_from_text(body: TextRunRequest):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _execute_suite(suite, body.headless)
+    return _execute_suite(suite, body.headless, execution_mode="legacy_text")
 
 
 @app.post("/api/v1/run/structured", response_model=TestReport)
@@ -206,7 +213,7 @@ def run_from_structured(body: StructuredRunRequest):
         suite = structured_prompt_to_suite(body.prompt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _execute_suite(suite, body.headless)
+    return _execute_suite(suite, body.headless, execution_mode="structured")
 
 
 @app.post("/api/v1/run/agents", response_model=TestReport)
@@ -216,7 +223,20 @@ def run_from_agents(body: AgentRunRequest):
 
 @app.post("/api/v1/run/json", response_model=TestReport)
 def run_from_json(body: JsonRunRequest):
-    return _execute_suite(body.suite, body.headless)
+    """Run TestSuite JSON directly in Playwright (skip Agents 1–2)."""
+    return _execute_suite(body.suite, body.headless, execution_mode="direct_json")
+
+
+@app.post("/api/v1/suites/export/playwright")
+def export_playwright_spec(suite: TestSuite):
+    """Convert TestSuite JSON to downloadable Playwright TypeScript."""
+    return PlainTextResponse(
+        suite_to_playwright_spec(suite),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{suite.suite_id}_playwright.spec.ts"',
+        },
+    )
 
 
 @app.get("/api/v1/locators", response_model=ModuleMap)

@@ -168,6 +168,7 @@ class AgentOrchestrator:
             update={
                 "replay_mode": self.use_replay,
                 "suite_snapshot_path": snapshot_path,
+                "execution_mode": "agents",
             }
         )
 

@@ -62,6 +62,7 @@ Typical bottlenecks (from execution logs): **execute** (Playwright browser), **d
 
 ## Documentation
 
+- [**Complete project handbook**](docs/PROJECT_HANDBOOK.md) — phases, weekly plan, mentor requirements, architecture, samples (start here)
 - [Phase Architecture (required deliverables)](docs/PHASE2_ARCHITECTURE.md) — visible browser runs, Excel import, mentor phase items
 - [System Architecture (full reference)](docs/ARCHITECTURE.md) — 3-agent pipeline, caching, observability, Cloud Run, API
 - [Deploy on Cloud Run](docs/DEPLOY_CLOUD_RUN.md) — GCP production deploy (Playwright Docker)

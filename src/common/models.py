@@ -178,3 +178,7 @@ class TestReport(BaseModel):
     phase_timings: list[PhaseTiming] = Field(default_factory=list)
     suite_snapshot_path: Optional[str] = None
     replay_mode: bool = False
+    execution_mode: Optional[str] = Field(
+        default=None,
+        description="agents | structured | direct_json — how the run was started",
+    )

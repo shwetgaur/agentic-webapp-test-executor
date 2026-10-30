@@ -167,6 +167,7 @@ class DiscoveryAgent:
                     "email": "#login_id",
                     "e-mail": "#login_id",
                     "password": "#password",
+                    "next": "#domain_btn",
                     "login": "#login-button",
                     "sign in": "#nextbtn",
                 }

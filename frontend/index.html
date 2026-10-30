@@ -22,6 +22,12 @@
         </div>
       </div>
       <div class="topbar-meta">
+        <div id="token-usage-bar" class="token-usage-bar" aria-live="polite">
+          <span class="token-label">LLM tokens</span>
+          <span id="token-prompt" class="token-chip">Prompt: —</span>
+          <span id="token-completion" class="token-chip">Completion: —</span>
+          <span id="token-total" class="token-chip token-total">Total: —</span>
+        </div>
         <span id="health-badge" class="badge badge-muted">Checking…</span>
       </div>
     </header>
@@ -115,6 +121,24 @@
 
           <button type="submit" class="btn-primary span-2" id="run-btn">Run Test</button>
         </form>
+
+        <div class="panel-subsection">
+          <div class="panel-head">
+            <h3>Direct Playwright — TestSuite JSON</h3>
+            <p>Paste or load cached suite JSON and run Playwright only (no LLM / discovery).</p>
+          </div>
+          <label class="span-2 json-label">
+            TestSuite JSON
+            <textarea id="suite-json" rows="8" placeholder='{"suite_id":"TC01", "name":"...", "steps":[...]}'></textarea>
+          </label>
+          <div class="json-actions span-2">
+            <input type="file" id="suite-run-file" accept=".json,application/json" class="hidden" />
+            <button type="button" class="btn-secondary" id="load-suite-json-btn">Load JSON file</button>
+            <button type="button" class="btn-secondary" id="load-cached-suite-btn">Load cached suite for Test ID</button>
+            <button type="button" class="btn-secondary" id="export-playwright-btn">Download Playwright .spec.ts</button>
+            <button type="button" class="btn-primary" id="run-json-btn">Run Playwright (JSON)</button>
+          </div>
+        </div>
       </section>
 
       <section class="panel panel-result">
@@ -147,6 +171,9 @@
           <h3>Agent Pipeline</h3>
           <div id="agent-traces" class="trace-list"></div>
 
+          <h3>LLM token usage</h3>
+          <div id="token-usage-panel" class="token-usage-panel"></div>
+
           <h3>Performance &amp; LLM Usage</h3>
           <div id="perf-panel" class="perf-panel"></div>
 
@@ -172,6 +199,6 @@
       <a href="https://github.com/shwetgaur/agentic-webapp-test-executor" target="_blank" rel="noopener">GitHub</a>
     </footer>
 
-    <script src="/static/js/app.js?v=8"></script>
+    <script src="/static/js/app.js?v=9"></script>
   </body>
 </html>

@@ -8,7 +8,9 @@ environment: develop
 owner_team: auth-frontend
 steps:
   - Open https://accounts.zoho.com/signin
+  - Verify URL contains zoho.com
   - Fill email with YOUR_ZOHO_EMAIL
+  - Click Next
   - Fill password with YOUR_ZOHO_PASSWORD
   - Click Sign in
-  - Verify URL contains zoho.com
+  - Verify URL contains zoho
